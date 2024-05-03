@@ -1,7 +1,7 @@
 use std::{os::unix::net::UnixStream, path::{Path, PathBuf}};
 
-use ssh_agent_lib::{agent::Session, client::connect, error::AgentError, proto::Identity, Agent};
-use tokio::net::UnixListener;
+use ssh_agent_lib::{agent::{ListeningSocket, Session}, client::connect, error::AgentError, proto::Identity, Agent};
+use tokio::{net::UnixListener, select, signal};
 
 pub async fn list_identities(sock_path: impl AsRef<Path>) -> Result<Vec<Identity>, AgentError> {
     let stream = UnixStream::connect(sock_path)?;
@@ -53,8 +53,10 @@ impl MuxAgent {
         let this = Self {
             socket_paths,
         };
-        this.listen(UnixListener::bind(listen_sock)?)
-            .await?;
+        select! {
+            res = this.listen(SelfDeletingUnixListener::bind(listen_sock)?) => res?,
+            _ = signal::ctrl_c() => (), 
+        }
 
         Ok(())
     }
@@ -67,5 +69,34 @@ impl Agent for MuxAgent {
             // TODO: should there be a connection pool?
             socket_paths: self.socket_paths.clone(),
         }
+    }
+}
+
+#[derive(Debug)]
+struct SelfDeletingUnixListener {
+    path: PathBuf,
+    listener: UnixListener,
+}
+
+impl SelfDeletingUnixListener {
+    fn bind(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let path = path.as_ref().to_path_buf();
+        UnixListener::bind(&path)
+            .map(|listener| Self { path, listener, })
+    }
+}
+
+impl Drop for SelfDeletingUnixListener {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+#[ssh_agent_lib::async_trait]
+impl ListeningSocket for SelfDeletingUnixListener {
+    type Stream = tokio::net::UnixStream;
+
+    async fn accept(&mut self) -> std::io::Result<Self::Stream> {
+        UnixListener::accept(&self.listener).await.map(|(s, _addr)| s)
     }
 }
