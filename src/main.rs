@@ -1,7 +1,7 @@
-use std::io::Error;
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let sock_path = std::env::args_os().nth(1).ok_or_else(|| Error::other("Socket path not specified"))?;
-    ssh_agent_mux::list_identities(&sock_path).await
+    let sock_paths = std::env::args_os().skip(1);
+    let identities = ssh_agent_mux::combine_identities(sock_paths).await?;
+    dbg!(&identities);
+    Ok(())
 }
