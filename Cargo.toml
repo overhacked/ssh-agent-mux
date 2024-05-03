@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-service-binding = "2.1.0"
+clap-serde-derive = "0.2.1"
+serde = { version = "1.0.200", features = ["derive"] }
 ssh-agent-lib = { git = "https://github.com/wiktor-k/ssh-agent-lib", rev = "576f21f56be911e69c74bf57f336c2dabf65db4b", version = "0.4.0" }
 tokio = { version = "1.37.0", features = ["rt", "macros"] }
+toml = "0.8.12"
