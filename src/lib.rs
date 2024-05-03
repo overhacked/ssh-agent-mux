@@ -1,7 +1,7 @@
 use std::{os::unix::net::UnixStream, path::{Path, PathBuf}};
 
 use ssh_agent_lib::{agent::{ListeningSocket, Session}, client::connect, error::AgentError, proto::Identity, Agent};
-use tokio::{net::UnixListener, select, signal};
+use tokio::net::UnixListener;
 
 pub async fn list_identities(sock_path: impl AsRef<Path>) -> Result<Vec<Identity>, AgentError> {
     let stream = UnixStream::connect(sock_path)?;
@@ -53,10 +53,7 @@ impl MuxAgent {
         let this = Self {
             socket_paths,
         };
-        select! {
-            res = this.listen(SelfDeletingUnixListener::bind(listen_sock)?) => res?,
-            _ = signal::ctrl_c() => (), 
-        }
+        this.listen(SelfDeletingUnixListener::bind(listen_sock)?).await?;
 
         Ok(())
     }

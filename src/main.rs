@@ -1,4 +1,6 @@
 use ssh_agent_mux::MuxAgent;
+use tokio::select;
+use tokio::signal::{self, unix::SignalKind};
 
 mod cli;
 
@@ -6,7 +8,15 @@ mod cli;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = cli::Config::parse()?;
 
-    MuxAgent::run(&config.listen_path, &config.agent_sock_paths).await?;
+    let mut sigterm = signal::unix::signal(SignalKind::terminate())?;
+
+    select! {
+        res = MuxAgent::run(&config.listen_path, &config.agent_sock_paths) => res?,
+        // Cleanly exit on interrupt and SIGTERM, allowing
+        // MuxAgent to clean up
+        _ = signal::ctrl_c() => (),
+        Some(_) = sigterm.recv() => (),
+    }
 
     Ok(())
 }
