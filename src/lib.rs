@@ -1,44 +1,64 @@
-use std::{os::unix::net::UnixStream, path::{Path, PathBuf}};
+use std::{collections::HashMap, os::unix::net::UnixStream, path::{Path, PathBuf}, pin::Pin, sync::{Arc, Mutex}};
 
-use ssh_agent_lib::{agent::{ListeningSocket, Session}, client::connect, error::AgentError, proto::Identity, Agent};
+use ssh_agent_lib::{agent::{ListeningSocket, Session}, client::connect, error::AgentError, proto::{Identity, SignRequest}, Agent};
+use ssh_key::{public::KeyData as PubKeyData, Signature};
 use tokio::net::UnixListener;
 
-pub async fn list_identities(sock_path: impl AsRef<Path>) -> Result<Vec<Identity>, AgentError> {
-    let stream = UnixStream::connect(sock_path)?;
-    let mut client = connect(stream.into()).await
-        .map_err(|_| AgentError::Other(Box::<dyn std::error::Error + Send + Sync>::from("Failed to connect to agent")))?;
-
-    let identities = client.request_identities().await?;
-
-    Ok(identities)
-}
-
-pub async fn combine_identities<I, P>(sock_paths: I) -> Result<Vec<Identity>, AgentError>
-where
-    I: IntoIterator<Item = P>,
-    P: AsRef<Path>,
-{
-    let mut identities = vec![];
-    for sock_path in sock_paths {
-        identities.extend(list_identities(sock_path).await?);
-    }
-
-    Ok(identities)
-}
+type KnownPubKeys = Arc<Mutex<HashMap<PubKeyData, PathBuf>>>;
 
 struct MuxAgentSession {
     socket_paths: Vec<PathBuf>,
+    known_keys: KnownPubKeys,
+}
+
+impl MuxAgentSession {
+    async fn connect_upstream_agent(&self, sock_path: impl AsRef<Path>) -> Result<Pin<Box<dyn Session>>, AgentError> {
+        let stream = UnixStream::connect(sock_path)?;
+        connect(stream.into()).await
+            .map_err(|_| AgentError::Other(Box::<dyn std::error::Error + Send + Sync>::from("Failed to connect to agent")))
+    }
 }
 
 #[ssh_agent_lib::async_trait]
 impl Session for MuxAgentSession {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
-        combine_identities(&self.socket_paths).await
+        let mut identities = vec![];
+        for sock_path in &self.socket_paths {
+            let mut client = self.connect_upstream_agent(sock_path).await?;
+            let agent_identities = client.request_identities().await?;
+            {
+                let mut known_keys = self.known_keys.lock().expect("Mutex poisoned");
+                for id in &agent_identities {
+                    // Use contains_key check instead of extend API to avoid unnecessary clone
+                    if !known_keys.contains_key(&id.pubkey) {
+                        known_keys.insert(id.pubkey.clone(), sock_path.clone());
+                    }
+                }
+            }
+            identities.extend(agent_identities);
+        }
+
+        Ok(identities)
+    }
+
+    async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
+        // Refresh available identities if the public key isn't found
+        if !self.known_keys.lock().expect("Mutex poisoned").contains_key(&request.pubkey) {
+            let _ = self.request_identities().await?;
+        }
+        let maybe_agent = self.known_keys.lock().expect("Mutex poisoned").get(&request.pubkey).cloned();
+        if let Some(agent_sock_path) = maybe_agent {
+            let mut client = self.connect_upstream_agent(agent_sock_path).await?;
+            client.sign(request).await
+        } else {
+            todo!("Error: no agent for public key")
+        }
     }
 }
 
 pub struct MuxAgent {
     socket_paths: Vec<PathBuf>,
+    known_keys: KnownPubKeys,
 }
 
 impl MuxAgent {
@@ -52,6 +72,7 @@ impl MuxAgent {
             .collect();
         let this = Self {
             socket_paths,
+            known_keys: Default::default(),
         };
         this.listen(SelfDeletingUnixListener::bind(listen_sock)?).await?;
 
@@ -65,6 +86,7 @@ impl Agent for MuxAgent {
         MuxAgentSession {
             // TODO: should there be a connection pool?
             socket_paths: self.socket_paths.clone(),
+            known_keys: Arc::clone(&self.known_keys),
         }
     }
 }

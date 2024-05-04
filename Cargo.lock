@@ -1030,6 +1030,7 @@ dependencies = [
  "clap-serde-derive",
  "serde",
  "ssh-agent-lib",
+ "ssh-key",
  "tokio",
  "toml",
 ]
