@@ -1,6 +1,18 @@
-use std::{collections::HashMap, os::unix::net::UnixStream, path::{Path, PathBuf}, pin::Pin, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    os::unix::net::UnixStream,
+    path::{Path, PathBuf},
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 
-use ssh_agent_lib::{agent::{ListeningSocket, Session}, client::connect, error::AgentError, proto::{Identity, SignRequest}, Agent};
+use ssh_agent_lib::{
+    agent::{ListeningSocket, Session},
+    client::connect,
+    error::AgentError,
+    proto::{Identity, SignRequest},
+    Agent,
+};
 use ssh_key::{public::KeyData as PubKeyData, Signature};
 use tokio::net::UnixListener;
 
@@ -12,10 +24,14 @@ struct MuxAgentSession {
 }
 
 impl MuxAgentSession {
-    async fn connect_upstream_agent(&self, sock_path: impl AsRef<Path>) -> Result<Pin<Box<dyn Session>>, AgentError> {
+    async fn connect_upstream_agent(
+        &self,
+        sock_path: impl AsRef<Path>,
+    ) -> Result<Pin<Box<dyn Session>>, AgentError> {
         let stream = UnixStream::connect(sock_path)?;
-        connect(stream.into()).await
-            .map_err(|_| AgentError::Other(Box::<dyn std::error::Error + Send + Sync>::from("Failed to connect to agent")))
+        connect(stream.into())
+            .await
+            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))
     }
 }
 
@@ -43,15 +59,31 @@ impl Session for MuxAgentSession {
 
     async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
         // Refresh available identities if the public key isn't found
-        if !self.known_keys.lock().expect("Mutex poisoned").contains_key(&request.pubkey) {
+        if !self
+            .known_keys
+            .lock()
+            .expect("Mutex poisoned")
+            .contains_key(&request.pubkey)
+        {
             let _ = self.request_identities().await?;
         }
-        let maybe_agent = self.known_keys.lock().expect("Mutex poisoned").get(&request.pubkey).cloned();
+        let maybe_agent = self
+            .known_keys
+            .lock()
+            .expect("Mutex poisoned")
+            .get(&request.pubkey)
+            .cloned();
         if let Some(agent_sock_path) = maybe_agent {
             let mut client = self.connect_upstream_agent(agent_sock_path).await?;
             client.sign(request).await
         } else {
-            todo!("Error: no agent for public key")
+            Err(AgentError::Other(
+                format!(
+                    "No agent found for public key: {}",
+                    request.pubkey.fingerprint(Default::default())
+                )
+                .into(),
+            ))
         }
     }
 }
@@ -67,14 +99,16 @@ impl MuxAgent {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let socket_paths = agent_socks.into_iter()
+        let socket_paths = agent_socks
+            .into_iter()
             .map(|p| p.as_ref().to_path_buf())
             .collect();
         let this = Self {
             socket_paths,
             known_keys: Default::default(),
         };
-        this.listen(SelfDeletingUnixListener::bind(listen_sock)?).await?;
+        this.listen(SelfDeletingUnixListener::bind(listen_sock)?)
+            .await?;
 
         Ok(())
     }
@@ -100,8 +134,7 @@ struct SelfDeletingUnixListener {
 impl SelfDeletingUnixListener {
     fn bind(path: impl AsRef<Path>) -> std::io::Result<Self> {
         let path = path.as_ref().to_path_buf();
-        UnixListener::bind(&path)
-            .map(|listener| Self { path, listener, })
+        UnixListener::bind(&path).map(|listener| Self { path, listener })
     }
 }
 
@@ -116,6 +149,8 @@ impl ListeningSocket for SelfDeletingUnixListener {
     type Stream = tokio::net::UnixStream;
 
     async fn accept(&mut self) -> std::io::Result<Self::Stream> {
-        UnixListener::accept(&self.listener).await.map(|(s, _addr)| s)
+        UnixListener::accept(&self.listener)
+            .await
+            .map(|(s, _addr)| s)
     }
 }
