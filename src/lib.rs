@@ -28,10 +28,13 @@ impl MuxAgentSession {
         &self,
         sock_path: impl AsRef<Path>,
     ) -> Result<Pin<Box<dyn Session>>, AgentError> {
+        let sock_path = sock_path.as_ref();
         let stream = UnixStream::connect(sock_path)?;
-        connect(stream.into())
+        let client = connect(stream.into())
             .await
-            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))
+            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
+        log::trace!("Connected to upstream agent on socket: {}", sock_path.display());
+        Ok(client)
     }
 }
 
@@ -42,8 +45,11 @@ impl Session for MuxAgentSession {
         for sock_path in &self.socket_paths {
             let mut client = match self.connect_upstream_agent(sock_path).await {
                 Ok(c) => c,
-                // TODO: logging; command-line option to fail on upstream agent failure
-                Err(_) => continue,
+                // TODO: command-line option to fail on upstream agent failure
+                Err(_) => {
+                    log::warn!("Ignoring missing upstream agent socket: {}", sock_path.display());
+                    continue;
+                },
             };
             let agent_identities = client.request_identities().await?;
             {
@@ -67,6 +73,7 @@ impl Session for MuxAgentSession {
             .expect("Mutex poisoned")
             .contains_key(&request.pubkey)
         {
+            log::debug!("Key not found, re-requesting keys from upstream agents");
             let _ = self.request_identities().await?;
         }
         let maybe_agent = self
@@ -76,13 +83,17 @@ impl Session for MuxAgentSession {
             .get(&request.pubkey)
             .cloned();
         if let Some(agent_sock_path) = maybe_agent {
+            log::info!("Request: signature with key {} from upstream agent <{}>", request.pubkey.fingerprint(Default::default()), agent_sock_path.display());
+
             let mut client = self.connect_upstream_agent(agent_sock_path).await?;
             client.sign(request).await
         } else {
+            let fingerprint = request.pubkey.fingerprint(Default::default());
+            log::error!("No upstream agent found for public key {}", &fingerprint);
             Err(AgentError::Other(
                 format!(
                     "No agent found for public key: {}",
-                    request.pubkey.fingerprint(Default::default())
+                    &fingerprint
                 )
                 .into(),
             ))
@@ -101,10 +112,12 @@ impl MuxAgent {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
-        let socket_paths = agent_socks
+        let socket_paths: Vec<_> = agent_socks
             .into_iter()
             .map(|p| p.as_ref().to_path_buf())
             .collect();
+        log::info!("Starting agent for {} upstream agents; listening on <{}>", socket_paths.len(), listen_sock.as_ref().display());
+        log::debug!("Upstream agent sockets: {:?}", &socket_paths);
         let this = Self {
             socket_paths,
             known_keys: Default::default(),

@@ -6,6 +6,8 @@ mod cli;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    pretty_env_logger::init();
+
     let config = cli::Config::parse()?;
 
     let mut sigterm = signal::unix::signal(SignalKind::terminate())?;
