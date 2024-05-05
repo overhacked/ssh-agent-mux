@@ -10,7 +10,7 @@ use ssh_agent_lib::{
     agent::{ListeningSocket, Session},
     client::connect,
     error::AgentError,
-    proto::{Identity, SignRequest},
+    proto::{Extension, Identity, SignRequest},
     Agent,
 };
 use ssh_key::{public::KeyData as PubKeyData, Signature};
@@ -97,6 +97,27 @@ impl Session for MuxAgentSession {
                 )
                 .into(),
             ))
+        }
+    }
+
+    async fn extension(&mut self, request: Extension) -> Result<Option<Extension>, AgentError> {
+        match request.name.as_str() {
+            "query" => Ok(Some(Extension { name: request.name, details: Vec::default().into(), })),
+            "session-bind@openssh.com" => {
+                let mut response = Err(AgentError::ExtensionFailure);
+                for sock_path in &self.socket_paths {
+                    let mut client = match self.connect_upstream_agent(sock_path).await {
+                        Ok(c) => c,
+                        Err(_) =>  continue,
+                    };
+                    match client.extension(request.clone()).await {
+                        r @ Ok(_) => response = r,
+                        Err(_) => (),
+                    }
+                }
+                response
+            },
+            _ => Err(AgentError::ExtensionFailure),
         }
     }
 }
