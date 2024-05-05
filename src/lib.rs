@@ -40,7 +40,11 @@ impl Session for MuxAgentSession {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
         let mut identities = vec![];
         for sock_path in &self.socket_paths {
-            let mut client = self.connect_upstream_agent(sock_path).await?;
+            let mut client = match self.connect_upstream_agent(sock_path).await {
+                Ok(c) => c,
+                // TODO: logging; command-line option to fail on upstream agent failure
+                Err(_) => continue,
+            };
             let agent_identities = client.request_identities().await?;
             {
                 let mut known_keys = self.known_keys.lock().expect("Mutex poisoned");
