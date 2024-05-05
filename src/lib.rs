@@ -44,11 +44,9 @@ impl Session for MuxAgentSession {
             let agent_identities = client.request_identities().await?;
             {
                 let mut known_keys = self.known_keys.lock().expect("Mutex poisoned");
+                known_keys.clear();
                 for id in &agent_identities {
-                    // Use contains_key check instead of extend API to avoid unnecessary clone
-                    if !known_keys.contains_key(&id.pubkey) {
-                        known_keys.insert(id.pubkey.clone(), sock_path.clone());
-                    }
+                    known_keys.insert(id.pubkey.clone(), sock_path.clone());
                 }
             }
             identities.extend(agent_identities);
