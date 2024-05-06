@@ -3,7 +3,7 @@ use std::{
     os::unix::net::UnixStream,
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use ssh_agent_lib::{
@@ -14,7 +14,7 @@ use ssh_agent_lib::{
     Agent,
 };
 use ssh_key::{public::KeyData as PubKeyData, Signature};
-use tokio::net::UnixListener;
+use tokio::{net::UnixListener, sync::Mutex};
 
 type KnownPubKeys = Arc<Mutex<HashMap<PubKeyData, PathBuf>>>;
 
@@ -42,7 +42,8 @@ impl MuxAgentSession {
 impl Session for MuxAgentSession {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
         let mut identities = vec![];
-        self.known_keys.lock().expect("Mutex poisoned").clear();
+        let mut known_keys = self.known_keys.lock().await;
+        known_keys.clear();
 
         for sock_path in &self.socket_paths {
             let mut client = match self.connect_upstream_agent(sock_path).await {
@@ -55,7 +56,6 @@ impl Session for MuxAgentSession {
             };
             let agent_identities = client.request_identities().await?;
             {
-                let mut known_keys = self.known_keys.lock().expect("Mutex poisoned");
                 for id in &agent_identities {
                     known_keys.insert(id.pubkey.clone(), sock_path.clone());
                 }
@@ -71,7 +71,7 @@ impl Session for MuxAgentSession {
         if !self
             .known_keys
             .lock()
-            .expect("Mutex poisoned")
+            .await
             .contains_key(&request.pubkey)
         {
             log::debug!("Key not found, re-requesting keys from upstream agents");
@@ -80,7 +80,7 @@ impl Session for MuxAgentSession {
         let maybe_agent = self
             .known_keys
             .lock()
-            .expect("Mutex poisoned")
+            .await
             .get(&request.pubkey)
             .cloned();
         if let Some(agent_sock_path) = maybe_agent {
