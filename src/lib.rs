@@ -42,6 +42,8 @@ impl MuxAgentSession {
 impl Session for MuxAgentSession {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
         let mut identities = vec![];
+        self.known_keys.lock().expect("Mutex poisoned").clear();
+
         for sock_path in &self.socket_paths {
             let mut client = match self.connect_upstream_agent(sock_path).await {
                 Ok(c) => c,
@@ -54,7 +56,6 @@ impl Session for MuxAgentSession {
             let agent_identities = client.request_identities().await?;
             {
                 let mut known_keys = self.known_keys.lock().expect("Mutex poisoned");
-                known_keys.clear();
                 for id in &agent_identities {
                     known_keys.insert(id.pubkey.clone(), sock_path.clone());
                 }
@@ -90,6 +91,7 @@ impl Session for MuxAgentSession {
         } else {
             let fingerprint = request.pubkey.fingerprint(Default::default());
             log::error!("No upstream agent found for public key {}", &fingerprint);
+            log::trace!("Known keys: {:?}", self.known_keys);
             Err(AgentError::Other(
                 format!(
                     "No agent found for public key: {}",
