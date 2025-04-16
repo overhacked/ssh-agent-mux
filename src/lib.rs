@@ -2,16 +2,14 @@ use std::{
     collections::HashMap,
     os::unix::net::UnixStream,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::Arc,
 };
 
 use ssh_agent_lib::{
-    agent::{ListeningSocket, Session},
-    client::connect,
+    agent::{self, Agent, ListeningSocket, Session},
+    client,
     error::AgentError,
     proto::{Extension, Identity, SignRequest},
-    Agent,
 };
 use ssh_key::{public::KeyData as PubKeyData, Signature};
 use tokio::{net::UnixListener, sync::Mutex};
@@ -24,14 +22,13 @@ struct MuxAgentSession {
 }
 
 impl MuxAgentSession {
-    async fn connect_upstream_agent(
+    fn connect_upstream_agent(
         &self,
         sock_path: impl AsRef<Path>,
-    ) -> Result<Pin<Box<dyn Session>>, AgentError> {
+    ) -> Result<Box<dyn Session>, AgentError> {
         let sock_path = sock_path.as_ref();
         let stream = UnixStream::connect(sock_path)?;
-        let client = connect(stream.into())
-            .await
+        let client = client::connect(stream.into())
             .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
         log::trace!("Connected to upstream agent on socket: {}", sock_path.display());
         Ok(client)
@@ -46,7 +43,7 @@ impl Session for MuxAgentSession {
         known_keys.clear();
 
         for sock_path in &self.socket_paths {
-            let mut client = match self.connect_upstream_agent(sock_path).await {
+            let mut client = match self.connect_upstream_agent(sock_path) {
                 Ok(c) => c,
                 // TODO: command-line option to fail on upstream agent failure
                 Err(_) => {
@@ -86,7 +83,7 @@ impl Session for MuxAgentSession {
         if let Some(agent_sock_path) = maybe_agent {
             log::info!("Request: signature with key {} from upstream agent <{}>", request.pubkey.fingerprint(Default::default()), agent_sock_path.display());
 
-            let mut client = self.connect_upstream_agent(agent_sock_path).await?;
+            let mut client = self.connect_upstream_agent(agent_sock_path)?;
             client.sign(request).await
         } else {
             let fingerprint = request.pubkey.fingerprint(Default::default());
@@ -131,16 +128,16 @@ impl MuxAgent {
             socket_paths,
             known_keys: Default::default(),
         };
-        this.listen(SelfDeletingUnixListener::bind(listen_sock)?)
+        agent::listen(SelfDeletingUnixListener::bind(listen_sock)?, this)
             .await?;
 
         Ok(())
     }
 }
 
-impl Agent for MuxAgent {
+impl Agent<SelfDeletingUnixListener> for MuxAgent {
     #[doc = "Create new session object when a new socket is accepted."]
-    fn new_session(&mut self) -> impl Session {
+    fn new_session(&mut self, _socket: &<SelfDeletingUnixListener as ListeningSocket>::Stream) -> impl Session {
         MuxAgentSession {
             // TODO: should there be a connection pool?
             socket_paths: self.socket_paths.clone(),
