@@ -105,13 +105,13 @@ impl Session for MuxAgentSession {
             "session-bind@openssh.com" => {
                 let mut response = Err(AgentError::ExtensionFailure);
                 for sock_path in &self.socket_paths {
-                    let mut client = match self.connect_upstream_agent(sock_path).await {
-                        Ok(c) => c,
-                        Err(_) =>  continue,
-                    };
-                    match client.extension(request.clone()).await {
-                        r @ Ok(_) => response = r,
-                        Err(_) => (),
+                    // Try extension on upstream agents; discard any upstream failures
+                    // (but the default is ExtensionFailure if there are no successful
+                    // upstream responses)
+                    if let Ok(mut client) = self.connect_upstream_agent(sock_path) {
+                        if let r @ Ok(_) = client.extension(request.clone()).await {
+                            response = r;
+                        }
                     }
                 }
                 response
