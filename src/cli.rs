@@ -1,9 +1,11 @@
 use std::{env, fs::File, io::Read, path::PathBuf};
 
 use clap_serde_derive::{
-    clap::{self, Parser},
+    clap::{self, Parser, ValueEnum},
     ClapSerde,
+    serde::{self, Deserialize},
 };
+use log::LevelFilter;
 
 fn default_config_path() -> PathBuf {
     let config_dir = env::var_os("XDG_CONFIG_HOME")
@@ -34,6 +36,11 @@ pub struct Config {
     #[arg(short, long = "listen")]
     pub listen_path: PathBuf,
 
+    /// Log level for agent
+    #[default(LogLevel::Warn)]
+    #[arg(long, value_enum)]
+    pub log_level: LogLevel,
+
     /// Agent sockets to multiplex
     #[arg()]
     pub agent_sock_paths: Vec<PathBuf>,
@@ -55,5 +62,28 @@ impl Config {
         };
 
         Ok(config)
+    }
+}
+
+#[derive(ValueEnum, Clone, Deserialize)]
+pub enum LogLevel {
+    Off = 0,
+    Error = 1,
+    Warn = 2,
+    Info = 3,
+    Debug = 4,
+    Trace = 5,
+}
+
+impl From<LogLevel> for LevelFilter {
+    fn from(value: LogLevel) -> Self {
+        match value {
+            LogLevel::Off => LevelFilter::Off,
+            LogLevel::Error => LevelFilter::Error,
+            LogLevel::Warn => LevelFilter::Warn,
+            LogLevel::Info => LevelFilter::Info,
+            LogLevel::Debug => LevelFilter::Debug,
+            LogLevel::Trace => LevelFilter::Trace
+        }
     }
 }
