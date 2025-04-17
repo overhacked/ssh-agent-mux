@@ -10,8 +10,8 @@ use ssh_agent_lib::{
     client,
     error::AgentError,
     proto::{Extension, Identity, SignRequest},
+    ssh_key::{public::KeyData as PubKeyData, Signature},
 };
-use ssh_key::{public::KeyData as PubKeyData, Signature};
 use tokio::{net::UnixListener, sync::{Mutex, OwnedMutexGuard}};
 
 type KnownPubKeysMap = HashMap<PubKeyData, PathBuf>;
