@@ -67,23 +67,19 @@ impl Config {
 
 #[derive(ValueEnum, Clone, Deserialize)]
 pub enum LogLevel {
-    Off = 0,
     Error = 1,
     Warn = 2,
     Info = 3,
     Debug = 4,
-    Trace = 5,
 }
 
 impl From<LogLevel> for LevelFilter {
     fn from(value: LogLevel) -> Self {
         match value {
-            LogLevel::Off => LevelFilter::Off,
             LogLevel::Error => LevelFilter::Error,
             LogLevel::Warn => LevelFilter::Warn,
             LogLevel::Info => LevelFilter::Info,
             LogLevel::Debug => LevelFilter::Debug,
-            LogLevel::Trace => LevelFilter::Trace
         }
     }
 }
