@@ -63,14 +63,9 @@ impl Config {
         };
 
         config.listen_path = config.listen_path.expand_tilde_owned()?;
-
-        config.agent_sock_paths = {
-            let mut expanded_sock_paths = Vec::with_capacity(config.agent_sock_paths.len());
-            for path in config.agent_sock_paths {
-                expanded_sock_paths.push(path.expand_tilde_owned()?);
-            }
-            expanded_sock_paths
-        };
+        config.agent_sock_paths = config.agent_sock_paths.into_iter()
+            .map(|p| p.expand_tilde_owned())
+            .collect::<Result<_, _>>()?;
 
         Ok(config)
     }
