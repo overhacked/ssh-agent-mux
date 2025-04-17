@@ -25,19 +25,7 @@ impl Session for MuxAgent {
     }
 
     async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
-        // Refresh available identities if the public key isn't found;
-        // hold lock for duration of signing operation
-        let mut known_keys = self.known_keys.clone().lock_owned().await;
-        if !known_keys
-            .contains_key(&request.pubkey)
-        {
-            log::debug!("Key not found, re-requesting keys from upstream agents");
-            let _ = self.rerequest_identities(&mut known_keys).await?;
-        }
-        let maybe_agent = known_keys
-            .get(&request.pubkey)
-            .cloned();
-        if let Some(agent_sock_path) = maybe_agent {
+        if let Some(agent_sock_path) = self.get_agent_sock_for_pubkey(&request.pubkey).await? {
             log::info!("Request: signature with key {} from upstream agent <{}>", request.pubkey.fingerprint(Default::default()), agent_sock_path.display());
 
             let mut client = self.connect_upstream_agent(agent_sock_path)?;
@@ -60,18 +48,21 @@ impl Session for MuxAgent {
         match request.name.as_str() {
             "query" => Ok(Some(Extension { name: request.name, details: Vec::default().into(), })),
             "session-bind@openssh.com" => {
-                let mut response = Err(AgentError::ExtensionFailure);
+                let mut response = None;
                 for sock_path in &self.socket_paths {
                     // Try extension on upstream agents; discard any upstream failures
                     // (but the default is ExtensionFailure if there are no successful
                     // upstream responses)
                     if let Ok(mut client) = self.connect_upstream_agent(sock_path) {
-                        if let r @ Ok(_) = client.extension(request.clone()).await {
-                            response = r;
+                        if let Ok(Some(e)) = client.extension(request.clone()).await {
+                            response.get_or_insert(e);
                         }
                     }
                 }
-                response
+                match response {
+                    Some(_) => Ok(response),
+                    None => Err(AgentError::ExtensionFailure),
+                }
             },
             _ => Err(AgentError::ExtensionFailure),
         }
@@ -116,6 +107,22 @@ impl MuxAgent {
             .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
         log::trace!("Connected to upstream agent on socket: {}", sock_path.display());
         Ok(client)
+    }
+
+    async fn get_agent_sock_for_pubkey(&mut self, pubkey: &PubKeyData) -> Result<Option<PathBuf>, AgentError> {
+        // Refresh available identities if the public key isn't found;
+        // hold lock for duration of signing operation
+        let mut known_keys = self.known_keys.clone().lock_owned().await;
+        if !known_keys
+            .contains_key(pubkey)
+        {
+            log::debug!("Key not found, re-requesting keys from upstream agents");
+            let _ = self.rerequest_identities(&mut known_keys).await?;
+        }
+        let maybe_agent = known_keys
+            .get(pubkey)
+            .cloned();
+        Ok(maybe_agent)
     }
 
     async fn rerequest_identities(&mut self, known_keys: &mut OwnedMutexGuard<KnownPubKeysMap>) -> Result<Vec<Identity>, AgentError> {
