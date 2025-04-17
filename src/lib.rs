@@ -20,11 +20,13 @@ use tokio::{
 type KnownPubKeysMap = HashMap<PubKeyData, PathBuf>;
 type KnownPubKeys = Arc<Mutex<KnownPubKeysMap>>;
 
+/// Only the `request_identities`, `sign`, and `extension` commands are implemented. For
+/// `extension`, only the `session-bind@openssh.com` and `query` extensions are supported.
 #[ssh_agent_lib::async_trait]
 impl Session for MuxAgent {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
         let mut known_keys = self.known_keys.clone().lock_owned().await;
-        self.rerequest_identities(&mut known_keys).await
+        self.refresh_identities(&mut known_keys).await
     }
 
     async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
@@ -82,6 +84,8 @@ pub struct MuxAgent {
 }
 
 impl MuxAgent {
+    /// Run a MuxAgent, listening for SSH agent protocol requests on `listen_sock`, forwarding
+    /// requests to the specified paths in `agent_socks`
     pub async fn run<I, P>(listen_sock: impl AsRef<Path>, agent_socks: I) -> Result<(), AgentError>
     where
         I: IntoIterator<Item = P>,
@@ -97,13 +101,13 @@ impl MuxAgent {
             listen_sock.as_ref().display()
         );
         log::debug!("Upstream agent sockets: {:?}", &socket_paths);
+
+        let listen_sock = SelfDeletingUnixListener::bind(listen_sock)?;
         let this = Self {
             socket_paths,
             known_keys: Default::default(),
         };
-        agent::listen(SelfDeletingUnixListener::bind(listen_sock)?, this).await?;
-
-        Ok(())
+        agent::listen(listen_sock, this).await
     }
 
     fn connect_upstream_agent(
@@ -130,13 +134,15 @@ impl MuxAgent {
         let mut known_keys = self.known_keys.clone().lock_owned().await;
         if !known_keys.contains_key(pubkey) {
             log::debug!("Key not found, re-requesting keys from upstream agents");
-            let _ = self.rerequest_identities(&mut known_keys).await?;
+            let _ = self.refresh_identities(&mut known_keys).await?;
         }
         let maybe_agent = known_keys.get(pubkey).cloned();
         Ok(maybe_agent)
     }
 
-    async fn rerequest_identities(
+    // Factored out so that the known_keys lock can be held across a total request that includes a
+    // refresh of keys from upstream agents
+    async fn refresh_identities(
         &mut self,
         known_keys: &mut OwnedMutexGuard<KnownPubKeysMap>,
     ) -> Result<Vec<Identity>, AgentError> {
@@ -178,6 +184,7 @@ impl Agent<SelfDeletingUnixListener> for MuxAgent {
 }
 
 #[derive(Debug)]
+/// A wrapper for UnixListener that keeps the socket path around so it can be deleted
 struct SelfDeletingUnixListener {
     path: PathBuf,
     listener: UnixListener,
