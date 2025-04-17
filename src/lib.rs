@@ -55,20 +55,34 @@ impl Session for MuxAgent {
                 extensions: ["session-bind@openssh.com"].map(String::from).to_vec(),
             })?)),
             "session-bind@openssh.com" => {
-                let mut response = None;
+                let mut session_bind_suceeded = false;
                 for sock_path in &self.socket_paths {
-                    // Try extension on upstream agents; discard any upstream failures
-                    // (but the default is ExtensionFailure if there are no successful
-                    // upstream responses)
+                    // Try extension on upstream agents; discard any upstream failures from agents
+                    // that don't support the extension (but the default is Failure if there are no
+                    // successful upstream responses)
                     if let Ok(mut client) = self.connect_upstream_agent(sock_path) {
-                        if let Ok(Some(e)) = client.extension(request.clone()).await {
-                            response.get_or_insert(e);
+                        match client.extension(request.clone()).await {
+                            // Any agent succeeding is an overall success
+                            Ok(v) => {
+                                session_bind_suceeded = true;
+                                if v.is_some() {
+                                    log::warn!("session-bind@openssh.com request succeeded on socket <{}>, but an invalid response was received", sock_path.display());
+                                }
+                            }
+                            // Don't propagate upstream lack of extension support
+                            Err(AgentError::Failure) => continue,
+                            // Report but ignore any unexpected errors
+                            Err(e) => {
+                                log::error!("Unexpected error on socket <{}> when requesting session-bind@openssh.com extension: {}", sock_path.display(), e);
+                                continue;
+                            }
                         }
                     }
                 }
-                match response {
-                    Some(_) => Ok(response),
-                    None => Err(AgentError::ExtensionFailure),
+                if session_bind_suceeded {
+                    Ok(None)
+                } else {
+                    Err(AgentError::Failure)
                 }
             }
             _ => Err(AgentError::Failure),
