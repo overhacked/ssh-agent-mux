@@ -16,27 +16,8 @@ use tokio::{net::UnixListener, sync::Mutex};
 
 type KnownPubKeys = Arc<Mutex<HashMap<PubKeyData, PathBuf>>>;
 
-struct MuxAgentSession {
-    socket_paths: Vec<PathBuf>,
-    known_keys: KnownPubKeys,
-}
-
-impl MuxAgentSession {
-    fn connect_upstream_agent(
-        &self,
-        sock_path: impl AsRef<Path>,
-    ) -> Result<Box<dyn Session>, AgentError> {
-        let sock_path = sock_path.as_ref();
-        let stream = UnixStream::connect(sock_path)?;
-        let client = client::connect(stream.into())
-            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
-        log::trace!("Connected to upstream agent on socket: {}", sock_path.display());
-        Ok(client)
-    }
-}
-
 #[ssh_agent_lib::async_trait]
-impl Session for MuxAgentSession {
+impl Session for MuxAgent {
     async fn request_identities(&mut self) -> Result<Vec<Identity>, AgentError> {
         let mut identities = vec![];
         let mut known_keys = self.known_keys.lock().await;
@@ -121,6 +102,7 @@ impl Session for MuxAgentSession {
     }
 }
 
+#[derive(Clone)]
 pub struct MuxAgent {
     socket_paths: Vec<PathBuf>,
     known_keys: KnownPubKeys,
@@ -147,16 +129,24 @@ impl MuxAgent {
 
         Ok(())
     }
+
+    fn connect_upstream_agent(
+        &self,
+        sock_path: impl AsRef<Path>,
+    ) -> Result<Box<dyn Session>, AgentError> {
+        let sock_path = sock_path.as_ref();
+        let stream = UnixStream::connect(sock_path)?;
+        let client = client::connect(stream.into())
+            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
+        log::trace!("Connected to upstream agent on socket: {}", sock_path.display());
+        Ok(client)
+    }
 }
 
 impl Agent<SelfDeletingUnixListener> for MuxAgent {
     #[doc = "Create new session object when a new socket is accepted."]
     fn new_session(&mut self, _socket: &<SelfDeletingUnixListener as ListeningSocket>::Stream) -> impl Session {
-        MuxAgentSession {
-            // TODO: should there be a connection pool?
-            socket_paths: self.socket_paths.clone(),
-            known_keys: Arc::clone(&self.known_keys),
-        }
+        self.clone()
     }
 }
 
