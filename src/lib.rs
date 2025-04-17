@@ -9,7 +9,7 @@ use ssh_agent_lib::{
     agent::{self, Agent, ListeningSocket, Session},
     client,
     error::AgentError,
-    proto::{Extension, Identity, SignRequest},
+    proto::{extension::QueryResponse, Extension, Identity, SignRequest},
     ssh_key::{public::KeyData as PubKeyData, Signature},
 };
 use tokio::{
@@ -51,10 +51,9 @@ impl Session for MuxAgent {
 
     async fn extension(&mut self, request: Extension) -> Result<Option<Extension>, AgentError> {
         match request.name.as_str() {
-            "query" => Ok(Some(Extension {
-                name: request.name,
-                details: Vec::default().into(),
-            })),
+            "query" => Ok(Some(Extension::new_message(QueryResponse {
+                extensions: ["session-bind@openssh.com"].map(String::from).to_vec(),
+            })?)),
             "session-bind@openssh.com" => {
                 let mut response = None;
                 for sock_path in &self.socket_paths {
@@ -72,7 +71,7 @@ impl Session for MuxAgent {
                     None => Err(AgentError::ExtensionFailure),
                 }
             }
-            _ => Err(AgentError::ExtensionFailure),
+            _ => Err(AgentError::Failure),
         }
     }
 }
