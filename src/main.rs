@@ -1,6 +1,9 @@
 use std::env;
 
-use flexi_logger::{filter::{LogLineFilter, LogLineWriter}, FlexiLoggerError, LogSpecification, Logger, LoggerHandle};
+use flexi_logger::{
+    filter::{LogLineFilter, LogLineWriter},
+    FlexiLoggerError, LogSpecification, Logger, LoggerHandle,
+};
 use log::LevelFilter;
 use ssh_agent_mux::MuxAgent;
 use tokio::select;
@@ -19,7 +22,11 @@ impl LogLineFilter for SuppressExtensionFailure {
         record: &log::Record,
         log_line_writer: &dyn LogLineWriter,
     ) -> std::io::Result<()> {
-        if !record.args().to_string().contains("Extension failure handling message") {
+        if !record
+            .args()
+            .to_string()
+            .contains("Extension failure handling message")
+        {
             log_line_writer.write(now, record)?;
         }
         Ok(())
@@ -36,8 +43,7 @@ fn setup_logger(level: LevelFilter) -> Result<LoggerHandle, FlexiLoggerError> {
             .default(LevelFilter::Error)
             .module(env!("CARGO_CRATE_NAME"), level)
             .build();
-        Logger::with(logspec)
-            .filter(Box::new(SuppressExtensionFailure))
+        Logger::with(logspec).filter(Box::new(SuppressExtensionFailure))
     };
 
     logger.log_to_stdout().start()

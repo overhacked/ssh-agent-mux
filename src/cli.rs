@@ -1,7 +1,9 @@
 use std::{env, fs::File, io::Read, path::PathBuf};
 
 use clap_serde_derive::{
-    clap::{self, Parser, ValueEnum}, serde::{self, Deserialize}, ClapSerde
+    clap::{self, Parser, ValueEnum},
+    serde::{self, Deserialize},
+    ClapSerde,
 };
 use expand_tilde::ExpandTilde;
 use log::LevelFilter;
@@ -63,7 +65,9 @@ impl Config {
         };
 
         config.listen_path = config.listen_path.expand_tilde_owned()?;
-        config.agent_sock_paths = config.agent_sock_paths.into_iter()
+        config.agent_sock_paths = config
+            .agent_sock_paths
+            .into_iter()
             .map(|p| p.expand_tilde_owned())
             .collect::<Result<_, _>>()?;
 
