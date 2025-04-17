@@ -1,16 +1,16 @@
 use std::{env, fs::File, io::Read, path::PathBuf};
 
 use clap_serde_derive::{
-    clap::{self, Parser, ValueEnum},
-    ClapSerde,
-    serde::{self, Deserialize},
+    clap::{self, Parser, ValueEnum}, serde::{self, Deserialize}, ClapSerde
 };
+use expand_tilde::ExpandTilde;
 use log::LevelFilter;
 
 fn default_config_path() -> PathBuf {
     let config_dir = env::var_os("XDG_CONFIG_HOME")
+        .or_else(|| Some("~/.config".into()))
         .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|v| PathBuf::from(v).join(".config")))
+        .and_then(|p| p.expand_tilde_owned().ok())
         .expect("HOME not defined in environment");
 
     config_dir
@@ -33,6 +33,7 @@ struct Args {
 #[derive(ClapSerde)]
 pub struct Config {
     /// Listen path
+    #[default(PathBuf::from(concat!("~/.ssh/", env!("CARGO_PKG_NAME"), ".sock")))]
     #[arg(short, long = "listen")]
     pub listen_path: PathBuf,
 
@@ -50,7 +51,7 @@ impl Config {
     pub fn parse() -> Result<Self, Box<dyn std::error::Error>> {
         let mut args = Args::parse();
 
-        let config = if let Ok(mut f) = File::open(&args.config_path) {
+        let mut config = if let Ok(mut f) = File::open(&args.config_path) {
             let mut config_text = String::new();
             f.read_to_string(&mut config_text)?;
             match toml::from_str::<<Config as ClapSerde>::Opt>(&config_text) {
@@ -59,6 +60,16 @@ impl Config {
             }
         } else {
             Config::from(&mut args.config)
+        };
+
+        config.listen_path = config.listen_path.expand_tilde_owned()?;
+
+        config.agent_sock_paths = {
+            let mut expanded_sock_paths = Vec::with_capacity(config.agent_sock_paths.len());
+            for path in config.agent_sock_paths {
+                expanded_sock_paths.push(path.expand_tilde_owned()?);
+            }
+            expanded_sock_paths
         };
 
         Ok(config)
