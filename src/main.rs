@@ -11,6 +11,7 @@ use tokio::select;
 use tokio::signal::{self, unix::SignalKind};
 
 mod cli;
+mod service;
 
 /// Suppress upstream extension failures by default, because we probe agents for the
 /// session-bind@openssh.com extension and ignore failure. We'd like to keep the ability log
@@ -62,6 +63,10 @@ async fn main() -> EyreResult<()> {
     // stdout logging doesn't strictly require holding the LoggerHandle, but better to not
     // ignore and drop it in case anyone adds file logging in the future
     let _logger = setup_logger(config.log_level.into())?;
+
+    if config.service.install_service || config.service.restart_service || config.service.uninstall_service {
+        return service::handle_service_command(&config.service);
+    }
 
     let mut sigterm = signal::unix::signal(SignalKind::terminate())?;
 

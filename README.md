@@ -56,7 +56,7 @@ Download binaries for various operating systems and architectures from the [rele
 ```console
 $ ssh-agent-mux --install-service
 
-$ ssh-agent-mux --start-service
+$ ssh-agent-mux --restart-service
 OR
 $ systemctl --user enable --now ssh-agent-mux.service
 ```

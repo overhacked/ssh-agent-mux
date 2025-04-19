@@ -9,6 +9,8 @@ use color_eyre::eyre::Result as EyreResult;
 use expand_tilde::ExpandTilde;
 use log::LevelFilter;
 
+use crate::service;
+
 fn default_config_path() -> PathBuf {
     let config_dir = env::var_os("XDG_CONFIG_HOME")
         .or_else(|| Some("~/.config".into()))
@@ -44,6 +46,10 @@ pub struct Config {
     #[default(LogLevel::Warn)]
     #[arg(long, value_enum)]
     pub log_level: LogLevel,
+
+    #[serde(skip_deserializing)]
+    #[command(flatten)]
+    pub service: service::ServiceArgs,
 
     /// Agent sockets to multiplex
     #[arg()]
