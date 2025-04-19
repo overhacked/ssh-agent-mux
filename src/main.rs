@@ -1,5 +1,6 @@
 use std::env;
 
+use color_eyre::eyre::Result as EyreResult;
 use flexi_logger::{
     filter::{LogLineFilter, LogLineWriter},
     FlexiLoggerError, LogSpecification, Logger, LoggerHandle,
@@ -53,7 +54,9 @@ fn setup_logger(level: LevelFilter) -> Result<LoggerHandle, FlexiLoggerError> {
 // accessed by only one user, at the start of each SSH session, so it doesn't need tokio's powerful
 // async multithreading
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> EyreResult<()> {
+    color_eyre::install()?;
+
     let config = cli::Config::parse()?;
 
     // stdout logging doesn't strictly require holding the LoggerHandle, but better to not

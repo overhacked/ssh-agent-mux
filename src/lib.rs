@@ -104,18 +104,28 @@ impl MuxAgent {
         I: IntoIterator<Item = P>,
         P: AsRef<Path>,
     {
+        let listen_sock = listen_sock.as_ref();
         let socket_paths: Vec<_> = agent_socks
             .into_iter()
             .map(|p| p.as_ref().to_path_buf())
             .collect();
+        if socket_paths.is_empty() {
+            log::warn!("Mux agent running but no upstream agents configured");
+        }
         log::info!(
             "Starting agent for {} upstream agents; listening on <{}>",
             socket_paths.len(),
-            listen_sock.as_ref().display()
+            listen_sock.display()
         );
         log::debug!("Upstream agent sockets: {:?}", &socket_paths);
 
-        let listen_sock = SelfDeletingUnixListener::bind(listen_sock)?;
+        let listen_sock = match SelfDeletingUnixListener::bind(listen_sock) {
+            Ok(s) => s,
+            err => {
+                log::error!("Failed to open listening socket at {}", listen_sock.display());
+                err?
+            }
+        };
         let this = Self {
             socket_paths,
             known_keys: Default::default(),
@@ -130,7 +140,7 @@ impl MuxAgent {
         let sock_path = sock_path.as_ref();
         let stream = UnixStream::connect(sock_path)?;
         let client = client::connect(stream.into())
-            .map_err(|e| AgentError::Other(format!("Failed to connect to agent: {e}").into()))?;
+            .map_err(|e| AgentError::Other(format!("Failed to connect to agent at {}: {}", sock_path.display(), e).into()))?;
         log::trace!(
             "Connected to upstream agent on socket: {}",
             sock_path.display()

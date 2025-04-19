@@ -5,6 +5,7 @@ use clap_serde_derive::{
     serde::{self, Deserialize},
     ClapSerde,
 };
+use color_eyre::eyre::Result as EyreResult;
 use expand_tilde::ExpandTilde;
 use log::LevelFilter;
 
@@ -50,16 +51,15 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn parse() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn parse() -> EyreResult<Self> {
         let mut args = Args::parse();
 
         let mut config = if let Ok(mut f) = File::open(&args.config_path) {
+            log::info!("Read configuration from {}", args.config_path.display());
             let mut config_text = String::new();
             f.read_to_string(&mut config_text)?;
-            match toml::from_str::<<Config as ClapSerde>::Opt>(&config_text) {
-                Ok(config) => Config::from(config).merge(&mut args.config),
-                Err(_) => todo!("Error for config"),
-            }
+            let file_config = toml::from_str::<<Config as ClapSerde>::Opt>(&config_text)?;
+            Config::from(file_config).merge(&mut args.config)
         } else {
             Config::from(&mut args.config)
         };
