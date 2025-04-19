@@ -1,55 +1,11 @@
-use std::env;
-
 use color_eyre::eyre::Result as EyreResult;
-use flexi_logger::{
-    filter::{LogLineFilter, LogLineWriter},
-    FlexiLoggerError, LogSpecification, Logger, LoggerHandle,
-};
-use log::LevelFilter;
 use ssh_agent_mux::MuxAgent;
 use tokio::select;
 use tokio::signal::{self, unix::SignalKind};
 
 mod cli;
+mod logging;
 mod service;
-
-/// Suppress upstream extension failures by default, because we probe agents for the
-/// session-bind@openssh.com extension and ignore failure. We'd like to keep the ability log
-/// library errors but not cause lots of log noise on extension probing
-struct SuppressExtensionFailure;
-impl LogLineFilter for SuppressExtensionFailure {
-    fn write(
-        &self,
-        now: &mut flexi_logger::DeferredNow,
-        record: &log::Record,
-        log_line_writer: &dyn LogLineWriter,
-    ) -> std::io::Result<()> {
-        if !record
-            .args()
-            .to_string()
-            .contains("Extension failure handling message")
-        {
-            log_line_writer.write(now, record)?;
-        }
-        Ok(())
-    }
-}
-
-fn setup_logger(level: LevelFilter) -> Result<LoggerHandle, FlexiLoggerError> {
-    // If RUST_LOG is in the environment, follow its directives;
-    // otherwise, use the configuration file, command line args, or defaults.
-    let logger = if env::var_os("RUST_LOG").is_some() {
-        Logger::try_with_env()?
-    } else {
-        let logspec = LogSpecification::builder()
-            .default(LevelFilter::Error)
-            .module(env!("CARGO_CRATE_NAME"), level)
-            .build();
-        Logger::with(logspec).filter(Box::new(SuppressExtensionFailure))
-    };
-
-    logger.log_to_stdout().start()
-}
 
 // Use current_thread to keep our resource utilization down; this program will generally be
 // accessed by only one user, at the start of each SSH session, so it doesn't need tokio's powerful
@@ -62,7 +18,7 @@ async fn main() -> EyreResult<()> {
 
     // stdout logging doesn't strictly require holding the LoggerHandle, but better to not
     // ignore and drop it in case anyone adds file logging in the future
-    let _logger = setup_logger(config.log_level.into())?;
+    let _logger = logging::setup_logger(config.log_level.into())?;
 
     if config.service.install_service || config.service.restart_service || config.service.uninstall_service {
         return service::handle_service_command(&config.service);
