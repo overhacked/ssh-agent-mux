@@ -70,7 +70,7 @@ trim = true
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true
 # filter out the commits that are not conventional
-filter_unconventional = false
+filter_unconventional = true
 # regex for preprocessing the commit messages
 commit_preprocessors = [
     # remove issue numbers from commits
@@ -78,17 +78,18 @@ commit_preprocessors = [
 ]
 # regex for parsing and grouping commits
 commit_parsers = [
-    { message = "^[a|A]dd", group = "Added" },
-    { message = "^[s|S]upport", group = "Added" },
-    { message = "^[r|R]emove", group = "Removed" },
-    { message = "^.*: add", group = "Added" },
-    { message = "^.*: support", group = "Added" },
-    { message = "^.*: remove", group = "Removed" },
-    { message = "^.*: delete", group = "Removed" },
-    { message = "^test", group = "Fixed" },
-    { message = "^fix", group = "Fixed" },
-    { message = "^.*: fix", group = "Fixed" },
-    { message = "^.*", group = "Changed" },
+    { message = '^chore\(release\):', skip = true },
+    { message = '^[aA]dd', group = "Added" },
+    { message = '^[sS]upport', group = "Added" },
+    { message = '^[rR]emove', group = "Removed" },
+    { message = '^.*: [aA]dd', group = "Added" },
+    { message = '^.*: [sS]upport', group = "Added" },
+    { message = '^.*: [rR]emove', group = "Removed" },
+    { message = '^.*: [dD]elete', group = "Removed" },
+    { message = '^test', group = "Fixed" },
+    { message = '^fix', group = "Fixed" },
+    { message = '^.*: fix', group = "Fixed" },
+    { message = '^.*', group = "Changed" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
