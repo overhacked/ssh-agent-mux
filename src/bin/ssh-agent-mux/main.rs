@@ -7,12 +7,26 @@ mod cli;
 mod logging;
 mod service;
 
+#[cfg(debug_assertions)]
+fn install_eyre_hook() -> EyreResult<()> {
+    color_eyre::config::HookBuilder::default()
+        .display_env_section(true)
+        .install()
+}
+
+#[cfg(not(debug_assertions))]
+fn install_eyre_hook() -> EyreResult<()> {
+    color_eyre::config::HookBuilder::default()
+        .display_env_section(false)
+        .install()
+}
+
 // Use current_thread to keep our resource utilization down; this program will generally be
 // accessed by only one user, at the start of each SSH session, so it doesn't need tokio's powerful
 // async multithreading
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> EyreResult<()> {
-    color_eyre::install()?;
+    install_eyre_hook()?;
 
     let config = cli::Config::parse()?;
 
