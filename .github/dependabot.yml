@@ -5,6 +5,10 @@ updates:
     directory: "/"
     schedule:
       interval: daily
+    allow:
+      # Ignore transitive dependencies, because security updates to, e.g. SSH
+      # protocol, can only be addressed by upstream ssh-agent-lib
+      - dependency-type: "direct"
     open-pull-requests-limit: 10
 
   # Maintain dependencies for GitHub Actions
