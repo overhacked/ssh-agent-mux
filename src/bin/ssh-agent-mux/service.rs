@@ -91,8 +91,8 @@ To manually manage starting {arg0}, add the following to your shell startup scri
 
 if ! ps -A -u "$(id -u)" | grep -q {arg0}; then
     {current_exe:?} > /dev/null &
-fi
-        "##).trim().to_string());
+fi"##
+        ));
     }
 
     Err(err)
