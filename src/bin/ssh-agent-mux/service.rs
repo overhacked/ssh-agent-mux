@@ -22,9 +22,28 @@ pub struct ServiceArgs {
     /// Uninstall the user service manager configuration
     #[arg(long)]
     pub uninstall_service: bool,
+
+    /// Install the user service manager configuration
+    #[arg(long)]
+    pub install_config: bool,
+}
+
+impl ServiceArgs {
+    // Return `true` if any of the service-related args have been supplied
+    pub fn any(&self) -> bool {
+        self.install_service || self.restart_service || self.uninstall_service || self.install_config
+    }
 }
 
 pub fn handle_service_command(config: &Config) -> Result<()> {
+    if config.service.install_config {
+        if !config.config_path.try_exists()? {
+            return write_new_config_file(config);
+        } else {
+            bail!("Config file at {} already exists. Delete it and run --install-config again if you want to re-generate", config.config_path.display());
+        }
+    }
+
     let manager = {
         let mut m = <dyn ServiceManager>::native()?;
         if let Err(err) = m.set_level(service_manager::ServiceLevel::User) {

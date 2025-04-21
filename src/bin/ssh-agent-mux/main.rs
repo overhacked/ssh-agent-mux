@@ -34,7 +34,7 @@ async fn main() -> EyreResult<()> {
     // ignore and drop it in case anyone adds file logging in the future
     let _logger = logging::setup_logger(config.log_level.into())?;
 
-    if config.service.install_service || config.service.restart_service || config.service.uninstall_service {
+    if config.service.any() {
         return service::handle_service_command(&config);
     }
 
