@@ -2,7 +2,7 @@ use std::{env, fs::File, io::Read, path::PathBuf};
 
 use clap_serde_derive::{
     clap::{self, Parser, ValueEnum},
-    serde::{self, Deserialize},
+    serde::{self, Deserialize, Serialize},
     ClapSerde,
 };
 use color_eyre::eyre::Result as EyreResult;
@@ -35,7 +35,7 @@ struct Args {
     config: <Config as ClapSerde>::Opt,
 }
 
-#[derive(ClapSerde)]
+#[derive(ClapSerde, Clone, Serialize)]
 pub struct Config {
     /// Listen path
     #[default(PathBuf::from(concat!("~/.ssh/", env!("CARGO_PKG_NAME"), ".sock")))]
@@ -47,13 +47,21 @@ pub struct Config {
     #[arg(long, value_enum)]
     pub log_level: LogLevel,
 
-    #[serde(skip_deserializing)]
-    #[command(flatten)]
-    pub service: service::ServiceArgs,
-
     /// Agent sockets to multiplex
     #[arg()]
     pub agent_sock_paths: Vec<PathBuf>,
+
+    // Following are part of command line args, but
+    // not in configuration file
+
+    /// Config file path (not an arg; copied from struct Args)
+    #[arg(skip)]
+    #[serde(skip_deserializing, skip_serializing)]
+    pub config_path: PathBuf,
+
+    #[serde(skip_deserializing, skip_serializing)]
+    #[command(flatten)]
+    pub service: service::ServiceArgs,
 }
 
 impl Config {
@@ -70,6 +78,7 @@ impl Config {
             Config::from(&mut args.config)
         };
 
+        config.config_path = args.config_path;
         config.listen_path = config.listen_path.expand_tilde_owned()?;
         config.agent_sock_paths = config
             .agent_sock_paths
@@ -81,7 +90,8 @@ impl Config {
     }
 }
 
-#[derive(ValueEnum, Clone, Deserialize)]
+#[derive(ValueEnum, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum LogLevel {
     Error = 1,
     Warn = 2,

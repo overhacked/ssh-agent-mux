@@ -1,12 +1,14 @@
-use std::{env, io, path::PathBuf};
+use std::{env, fmt::Write, fs, io, path::PathBuf};
 
 use clap_serde_derive::clap::{self, Args};
 use color_eyre::{eyre::{bail, eyre, Result}, Section};
 use service_manager::{ServiceInstallCtx, ServiceManager, ServiceStartCtx, ServiceStatus, ServiceStatusCtx, ServiceStopCtx, ServiceUninstallCtx};
 
+use crate::cli::Config;
+
 const SERVICE_IDENT: &str = concat!("net.ross-williams.", env!("CARGO_PKG_NAME"));
 
-#[derive(Args, Default)]
+#[derive(Args, Clone, Copy, Default)]
 #[group(multiple = false)]
 pub struct ServiceArgs {
     /// Install the user service manager configuration
@@ -22,12 +24,12 @@ pub struct ServiceArgs {
     pub uninstall_service: bool,
 }
 
-pub fn handle_service_command(args: &ServiceArgs) -> Result<()> {
+pub fn handle_service_command(config: &Config) -> Result<()> {
     let manager = {
         let mut m = <dyn ServiceManager>::native()?;
         if let Err(err) = m.set_level(service_manager::ServiceLevel::User) {
             if err.kind() == io::ErrorKind::Unsupported {
-                return handle_set_level_error(args)
+                return handle_set_level_error(&config.service)
             } else {
                 Err(err)?
             }
@@ -36,7 +38,10 @@ pub fn handle_service_command(args: &ServiceArgs) -> Result<()> {
     };
 
     let label: service_manager::ServiceLabel = SERVICE_IDENT.parse().expect("SERVICE_IDENT is wrong");
-    if args.install_service {
+    if config.service.install_service {
+        if !config.config_path.try_exists()? {
+            write_new_config_file(config)?;
+        }
         manager.install(ServiceInstallCtx {
             label,
             program: env::current_exe()
@@ -50,7 +55,7 @@ pub fn handle_service_command(args: &ServiceArgs) -> Result<()> {
             disable_restart_on_failure: false,
         })?;
         println!("Installed service {}", SERVICE_IDENT);
-    } else if args.restart_service {
+    } else if config.service.restart_service {
         let status = manager.status(ServiceStatusCtx {
             label: label.clone(),
         })?;
@@ -69,13 +74,42 @@ pub fn handle_service_command(args: &ServiceArgs) -> Result<()> {
             label,
         })?;
         println!("Restarted service {}", SERVICE_IDENT);
-    } else if args.uninstall_service {
+    } else if config.service.uninstall_service {
         manager.uninstall(ServiceUninstallCtx {
             label,
         })?;
         println!("Uninstalled service {}", SERVICE_IDENT);
     }
 
+    Ok(())
+}
+
+fn write_new_config_file(config: &Config) -> Result<()> {
+    let mut success_msg = format!("Automatically creating configuration file at {} ", config.config_path.display());
+
+    let mut new_config = config.clone();
+    if config.agent_sock_paths.is_empty() {
+        match env::var("SSH_AUTH_SOCK") {
+            Ok(v) => {
+                success_msg.write_str("with the current SSH_AUTh_SOCK as the upstream agent; please edit to add additional agents.")?;
+                new_config.agent_sock_paths.push(v.into());
+            },
+            Err(e) => {
+                let mut emsg = String::from("A new configuration file cannot be created: ");
+                match e {
+                    env::VarError::NotPresent => { emsg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?; },
+                    env::VarError::NotUnicode(_) => { emsg.write_str("SSH_AUTH_SOCK is defined, but contains non-UTF-8 characters.")?; },
+                }
+                bail!(emsg);
+            },
+        };
+    } else {
+        write!(success_msg, "with the upstream agent socket paths specified on the command line.")?;
+    }
+
+    println!("{}", success_msg);
+    let new_config_toml = toml::to_string_pretty(&new_config)?;
+    fs::write(&config.config_path, new_config_toml.as_bytes())?;
     Ok(())
 }
 

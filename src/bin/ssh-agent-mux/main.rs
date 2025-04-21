@@ -35,7 +35,7 @@ async fn main() -> EyreResult<()> {
     let _logger = logging::setup_logger(config.log_level.into())?;
 
     if config.service.install_service || config.service.restart_service || config.service.uninstall_service {
-        return service::handle_service_command(&config.service);
+        return service::handle_service_command(&config);
     }
 
     let mut sigterm = signal::unix::signal(SignalKind::terminate())?;
