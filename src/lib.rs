@@ -122,7 +122,10 @@ impl MuxAgent {
         let listen_sock = match SelfDeletingUnixListener::bind(listen_sock) {
             Ok(s) => s,
             err => {
-                log::error!("Failed to open listening socket at {}", listen_sock.display());
+                log::error!(
+                    "Failed to open listening socket at {}",
+                    listen_sock.display()
+                );
                 err?
             }
         };
@@ -139,8 +142,16 @@ impl MuxAgent {
     ) -> Result<Box<dyn Session>, AgentError> {
         let sock_path = sock_path.as_ref();
         let stream = UnixStream::connect(sock_path)?;
-        let client = client::connect(stream.into())
-            .map_err(|e| AgentError::Other(format!("Failed to connect to agent at {}: {}", sock_path.display(), e).into()))?;
+        let client = client::connect(stream.into()).map_err(|e| {
+            AgentError::Other(
+                format!(
+                    "Failed to connect to agent at {}: {}",
+                    sock_path.display(),
+                    e
+                )
+                .into(),
+            )
+        })?;
         log::trace!(
             "Connected to upstream agent on socket: {}",
             sock_path.display()

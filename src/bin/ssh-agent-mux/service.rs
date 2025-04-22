@@ -1,8 +1,14 @@
 use std::{env, fmt::Write, fs, io, path::PathBuf};
 
 use clap_serde_derive::clap::{self, Args};
-use color_eyre::{eyre::{bail, eyre, Result}, Section};
-use service_manager::{ServiceInstallCtx, ServiceManager, ServiceStartCtx, ServiceStatus, ServiceStatusCtx, ServiceStopCtx, ServiceUninstallCtx};
+use color_eyre::{
+    eyre::{bail, eyre, Result},
+    Section,
+};
+use service_manager::{
+    ServiceInstallCtx, ServiceManager, ServiceStartCtx, ServiceStatus, ServiceStatusCtx,
+    ServiceStopCtx, ServiceUninstallCtx,
+};
 
 use crate::cli::Config;
 
@@ -31,7 +37,10 @@ pub struct ServiceArgs {
 impl ServiceArgs {
     // Return `true` if any of the service-related args have been supplied
     pub fn any(&self) -> bool {
-        self.install_service || self.restart_service || self.uninstall_service || self.install_config
+        self.install_service
+            || self.restart_service
+            || self.uninstall_service
+            || self.install_config
     }
 }
 
@@ -48,7 +57,7 @@ pub fn handle_service_command(config: &Config) -> Result<()> {
         let mut m = <dyn ServiceManager>::native()?;
         if let Err(err) = m.set_level(service_manager::ServiceLevel::User) {
             if err.kind() == io::ErrorKind::Unsupported {
-                return handle_set_level_error(&config.service)
+                return handle_set_level_error(&config.service);
             } else {
                 Err(err)?
             }
@@ -56,15 +65,19 @@ pub fn handle_service_command(config: &Config) -> Result<()> {
         m
     };
 
-    let label: service_manager::ServiceLabel = SERVICE_IDENT.parse().expect("SERVICE_IDENT is wrong");
+    let label: service_manager::ServiceLabel =
+        SERVICE_IDENT.parse().expect("SERVICE_IDENT is wrong");
     if config.service.install_service {
         if !config.config_path.try_exists()? {
             write_new_config_file(config)?;
         }
         manager.install(ServiceInstallCtx {
             label,
-            program: env::current_exe()
-                .note(concat!("Could not install service because path to ", env!("CARGO_CRATE_NAME"), " could not be determined."))?,
+            program: env::current_exe().note(concat!(
+                "Could not install service because path to ",
+                env!("CARGO_CRATE_NAME"),
+                " could not be determined."
+            ))?,
             args: Vec::default(),
             contents: None,
             username: None,
@@ -83,20 +96,16 @@ pub fn handle_service_command(config: &Config) -> Result<()> {
                 manager.stop(ServiceStopCtx {
                     label: label.clone(),
                 })?;
-            },
+            }
             ServiceStatus::NotInstalled => {
                 bail!("Service {SERVICE_IDENT} not installed; can't restart");
-            },
+            }
             ServiceStatus::Stopped(_) => (),
         }
-        manager.start(ServiceStartCtx {
-            label,
-        })?;
+        manager.start(ServiceStartCtx { label })?;
         println!("Restarted service {}", SERVICE_IDENT);
     } else if config.service.uninstall_service {
-        manager.uninstall(ServiceUninstallCtx {
-            label,
-        })?;
+        manager.uninstall(ServiceUninstallCtx { label })?;
         println!("Uninstalled service {}", SERVICE_IDENT);
     }
 
@@ -104,7 +113,10 @@ pub fn handle_service_command(config: &Config) -> Result<()> {
 }
 
 fn write_new_config_file(config: &Config) -> Result<()> {
-    let mut success_msg = format!("Automatically creating configuration file at {} ", config.config_path.display());
+    let mut success_msg = format!(
+        "Automatically creating configuration file at {} ",
+        config.config_path.display()
+    );
 
     let mut new_config = config.clone();
     if config.agent_sock_paths.is_empty() {
@@ -112,18 +124,27 @@ fn write_new_config_file(config: &Config) -> Result<()> {
             Ok(v) => {
                 success_msg.write_str("with the current SSH_AUTh_SOCK as the upstream agent; please edit to add additional agents.")?;
                 new_config.agent_sock_paths.push(v.into());
-            },
+            }
             Err(e) => {
                 let mut emsg = String::from("A new configuration file cannot be created: ");
                 match e {
-                    env::VarError::NotPresent => { emsg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?; },
-                    env::VarError::NotUnicode(_) => { emsg.write_str("SSH_AUTH_SOCK is defined, but contains non-UTF-8 characters.")?; },
+                    env::VarError::NotPresent => {
+                        emsg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?;
+                    }
+                    env::VarError::NotUnicode(_) => {
+                        emsg.write_str(
+                            "SSH_AUTH_SOCK is defined, but contains non-UTF-8 characters.",
+                        )?;
+                    }
                 }
                 bail!(emsg);
-            },
+            }
         };
     } else {
-        write!(success_msg, "with the upstream agent socket paths specified on the command line.")?;
+        write!(
+            success_msg,
+            "with the upstream agent socket paths specified on the command line."
+        )?;
     }
 
     println!("{}", success_msg);
@@ -139,7 +160,8 @@ fn handle_set_level_error(args: &ServiceArgs) -> Result<()> {
         let current_exe = env::current_exe().unwrap_or_else(|_| env!("CARGO_PKG_NAME").into());
         let current_exe_file_name = PathBuf::from(current_exe.file_name().unwrap());
         let arg0 = current_exe_file_name.display();
-        err = err.suggestion(format!(r##"
+        err = err.suggestion(format!(
+            r##"
 To manually manage starting {arg0}, add the following to your shell startup script:
 
 if ! ps -A -u "$(id -u)" | grep -q {arg0}; then

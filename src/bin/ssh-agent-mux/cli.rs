@@ -53,7 +53,6 @@ pub struct Config {
 
     // Following are part of command line args, but
     // not in configuration file
-
     /// Config file path (not an arg; copied from struct Args)
     #[arg(skip)]
     #[serde(skip_deserializing, skip_serializing)]
