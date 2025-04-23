@@ -96,6 +96,8 @@ pub enum LogLevel {
     Warn = 2,
     Info = 3,
     Debug = 4,
+    #[value(hide = true)]
+    Trace = 5
 }
 
 impl From<LogLevel> for LevelFilter {
@@ -105,6 +107,7 @@ impl From<LogLevel> for LevelFilter {
             LogLevel::Warn => LevelFilter::Warn,
             LogLevel::Info => LevelFilter::Info,
             LogLevel::Debug => LevelFilter::Debug,
+            LogLevel::Trace => LevelFilter::Trace,
         }
     }
 }
