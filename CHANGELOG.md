@@ -5,11 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-04-23
+
+### Added
+- Automatic configuration file generation
+- Add integration test
+- Add --install-config option
+- Add dependabot configuration
+
+### Changed
+- Suggest how to configure on service-unsupported platforms
+- Add homebrew to release CI
+- Add configuration reloading on SIGHUP
+
 ## [0.1.1] - 2025-04-19
+
+Release v0.1.1
+
+- Prepare for v0.1.1
+- Service management (as described in README)
+- Add color-eyre and improve some error reporting
+
+### Added
+- Add color-eyre and improve some error reporting
 
 ### Changed
 - Service management (as described in README)
-- Add color-eyre and improve some error reporting
 
 ## [0.1.0] - 2025-04-19
 
@@ -20,10 +41,10 @@ you to configure an SSH client just once. Provide all "upstream" SSH agents'
 SSH configuration at `ssh-agent-mux`'s socket, and it will offer all available
 public keys from upstream agents as available for authentication.
 
-### Changed
-- Prepare for v0.1.0
+### Added
 - Add release workflow and shell script
 
+[0.1.2]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.1..v0.1.2
 [0.1.1]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.0..v0.1.1
 [0.1.0]: https://github.com/overhacked/ssh-agent-mux/compare/v0.0.0..v0.1.0
 
