@@ -26,14 +26,14 @@ jobs:
 
   publish-github:
     name: Publish on GitHub
-    needs: changelog
+    needs: [changelog]
     runs-on: ${{ matrix.os }}
     env:
       # For some builds, we use cross to test on 32-bit and big-endian
       # systems.
       CARGO: cargo
       # When CARGO is set to CROSS, this is set to `--target matrix.target`.
-      TARGET_FLAGS:
+      TARGET_FLAGS: ""
       # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
       TARGET_DIR: ./target
       # Bump this as appropriate. We pin to a version to make sure CI
@@ -44,26 +44,26 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - build: linux
+        - build: linux-amd64
           os: ubuntu-latest
           rust: nightly
           target: x86_64-unknown-linux-musl
           strip: x86_64-linux-musl-strip
-        - build: stable-aarch64
+        - build: linux-arm64
           os: ubuntu-latest
           rust: stable
           target: aarch64-unknown-linux-gnu
           strip: aarch64-linux-gnu-strip
           qemu: qemu-aarch64
-        - build: macos-x86_64
+        - build: darwin-amd64
           os: macos-latest
           rust: nightly
           target: x86_64-apple-darwin
-        - build: macos-aarch64
+        - build: darwin-arm64
           os: macos-latest
           rust: nightly
           target: aarch64-apple-darwin
-        - build: freebsd
+        - build: freebsd-amd64
           os: ubuntu-latest
           rust: nightly
           target: x86_64-unknown-freebsd
@@ -141,7 +141,7 @@ jobs:
         shell: bash
         run: |
           version="${{ env.RELEASE_VERSION }}"
-          echo "ARCHIVE=ssh-agent-mux-$version-${{ matrix.target }}" >> $GITHUB_ENV
+          echo "ARCHIVE=ssh-agent-mux-$version-${{ matrix.build }}" >> $GITHUB_ENV
 
       - name: Creating directory for archive
         shell: bash
@@ -181,3 +181,36 @@ jobs:
 
       - name: Publish
         run: cargo publish --locked --token ${{ secrets.CARGO_TOKEN }}
+
+  homebrew-releaser:
+    name: Release to Homebrew tap
+    needs: [publish-github]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run homebrew-releaser
+        uses: Justintime50/homebrew-releaser@v2
+        with:
+          homebrew_owner: overhacked
+          homebrew_tap: tap
+
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+          install: 'bin.install "ssh-agent-mux"'
+
+          test: |
+            agent_pid = shell_output(%Q{nohup ssh-agent-mux --log-level info --config /dev/null --listen "#{testpath}/ssh-agent-mux.sock" > "#{testpath}/ssh-agent-mux.out & echo $!})
+            shell_output(%Q{kill #{agent_pid}})
+            agent_stdout = File.read(testpath/"ssh-agent-mux.out")
+            assert_match %r%Starting agent%, agent_stdout
+            assert_match %r%Exiting on SIGTERM%, agent_stdout
+
+          target_linux_amd64: true
+          target_linux_arm64: true
+          target_darwin_amd64: true
+          target_darwin_arm64: true
+
+          update_readme_table: true
+
+          # For testing:
+          skip_commit: true
+          debug: true
