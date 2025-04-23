@@ -193,16 +193,16 @@ jobs:
           homebrew_owner: overhacked
           homebrew_tap: tap
 
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          version: ${{ github.ref }}
+
+          github_token: ${{ secrets.TAP_TOKEN }}
 
           install: 'bin.install "ssh-agent-mux"'
 
           test: |
-            agent_pid = shell_output(%Q{nohup ssh-agent-mux --log-level info --config /dev/null --listen "#{testpath}/ssh-agent-mux.sock" > "#{testpath}/ssh-agent-mux.out & echo $!})
-            shell_output(%Q{kill #{agent_pid}})
-            agent_stdout = File.read(testpath/"ssh-agent-mux.out")
-            assert_match %r%Starting agent%, agent_stdout
-            assert_match %r%Exiting on SIGTERM%, agent_stdout
+            agent_stdout = shell_output(%Q{sock="#{testpath}/ssh-agent-mux.sock"; ssh-agent-mux --log-level info --config /dev/null --listen "$sock" & until [ -e "$sock" ]; do sleep 0.1; done; kill %1; wait %1})
+            assert_match "Starting agent", agent_stdout
+            assert_match "Exiting on SIGTERM", agent_stdout
 
           target_linux_amd64: true
           target_linux_arm64: true
@@ -212,5 +212,5 @@ jobs:
           update_readme_table: true
 
           # For testing:
-          skip_commit: true
-          debug: true
+          # skip_commit: true
+          # debug: true
