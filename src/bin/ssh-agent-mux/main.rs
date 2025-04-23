@@ -28,7 +28,7 @@ fn install_eyre_hook() -> EyreResult<()> {
 async fn main() -> EyreResult<()> {
     install_eyre_hook()?;
 
-    let config = cli::Config::parse()?;
+    let mut config = cli::Config::parse()?;
 
     // stdout logging doesn't strictly require holding the LoggerHandle, but better to not
     // ignore and drop it in case anyone adds file logging in the future
@@ -39,13 +39,20 @@ async fn main() -> EyreResult<()> {
     }
 
     let mut sigterm = signal::unix::signal(SignalKind::terminate())?;
+    let mut sighup = signal::unix::signal(SignalKind::hangup())?;
 
-    select! {
-        res = MuxAgent::run(&config.listen_path, &config.agent_sock_paths) => res?,
-        // Cleanly exit on interrupt and SIGTERM, allowing
-        // MuxAgent to clean up
-        _ = signal::ctrl_c() => (),
-        Some(_) = sigterm.recv() => (),
+    loop {
+        select! {
+            res = MuxAgent::run(&config.listen_path, &config.agent_sock_paths) => { res?; break },
+            // Cleanly exit on interrupt and SIGTERM, allowing
+            // MuxAgent to clean up
+            _ = signal::ctrl_c() => { log::info!("Exiting on SIGINT"); break },
+            Some(_) = sigterm.recv() => { log::info!("Exiting on SIGTERM"); break },
+            Some(_) = sighup.recv() => {
+                log::info!("Reloading configuration");
+                config = cli::Config::parse()?;
+            }
+        }
     }
 
     Ok(())
