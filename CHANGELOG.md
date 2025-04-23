@@ -5,19 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] - 2025-04-23
+## [0.1.3] - 2025-04-23
 
 ### Added
-- Automatic configuration file generation
+- Add homebrew to release CI
+- Add configuration reloading on SIGHUP
+- Add some trace logging
 - Add integration test
 - Add --install-config option
 - Add dependabot configuration
 
 ### Changed
+- Move test harness into separate module
+- Cargo fmt
+- Automatic configuration file generation
+- Cargo update
+- Dependabot only manages upstream dependencies
 - Suggest how to configure on service-unsupported platforms
-- Add homebrew to release CI
-- Add configuration reloading on SIGHUP
+- Move main and modules to a separate bin directory
+- Extract logging module
 
+### Fixed
+- Fix homebrew-tap workflow step
+
+## New Contributors
+* @overhacked made their first contribution
 ## [0.1.1] - 2025-04-19
 
 Release v0.1.1
@@ -44,7 +56,7 @@ public keys from upstream agents as available for authentication.
 ### Added
 - Add release workflow and shell script
 
-[0.1.2]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.1..v0.1.2
+[0.1.3]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.1..v0.1.3
 [0.1.1]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.0..v0.1.1
 [0.1.0]: https://github.com/overhacked/ssh-agent-mux/compare/v0.0.0..v0.1.0
 
