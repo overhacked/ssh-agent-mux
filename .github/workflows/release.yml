@@ -201,7 +201,12 @@ jobs:
           install: 'bin.install "ssh-agent-mux"'
 
           test: |
-            agent_stdout = shell_output(%Q{sock="#{testpath}/ssh-agent-mux.sock"; ssh-agent-mux --log-level info --config /dev/null --listen "$sock" & until [ -e "$sock" ]; do sleep 0.1; done; kill %1; wait %1})
+            agent_stdout = shell_output(
+                %Q(sock="#{testpath}/ssh-agent-mux.sock";) \
+                + %Q( ssh-agent-mux --log-level info --config /dev/null --listen "$sock" &) \
+                + %Q( until [ -e "$sock" ]; do sleep 0.1; done;) \
+                + %Q( kill %1; wait %1)
+            )
             assert_match "Starting agent", agent_stdout
             assert_match "Exiting on SIGTERM", agent_stdout
 
