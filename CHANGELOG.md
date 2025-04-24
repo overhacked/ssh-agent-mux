@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2025-04-24
+
+### Fixed
+- Fix homebrew-releaser workflow
+
 ## [0.1.3] - 2025-04-23
+
+Release v0.1.3
+
+- Fix homebrew-tap workflow step
 
 ### Added
 - Add homebrew to release CI
@@ -28,8 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fix homebrew-tap workflow step
 
-## New Contributors
-* @overhacked made their first contribution
 ## [0.1.1] - 2025-04-19
 
 Release v0.1.1
@@ -56,6 +63,7 @@ public keys from upstream agents as available for authentication.
 ### Added
 - Add release workflow and shell script
 
+[0.1.4]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.3..v0.1.4
 [0.1.3]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.1..v0.1.3
 [0.1.1]: https://github.com/overhacked/ssh-agent-mux/compare/v0.1.0..v0.1.1
 [0.1.0]: https://github.com/overhacked/ssh-agent-mux/compare/v0.0.0..v0.1.0
