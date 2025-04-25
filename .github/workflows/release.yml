@@ -189,7 +189,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run homebrew-releaser
-        uses: overhacked/homebrew-releaser@77b1a367ed0851be567d3762a7e69bee9523c349
+        uses: overhacked/homebrew-releaser@main
         with:
           homebrew_owner: overhacked
           homebrew_tap: homebrew-tap
