@@ -47,6 +47,10 @@ pub struct Config {
     #[arg(long, value_enum)]
     pub log_level: LogLevel,
 
+    /// Optional log file for agent (logs to standard output, otherwise)
+    #[arg(long, num_args = 1)]
+    pub log_file: Option<PathBuf>,
+
     /// Agent sockets to multiplex
     #[arg()]
     pub agent_sock_paths: Vec<PathBuf>,
@@ -79,6 +83,7 @@ impl Config {
 
         config.config_path = args.config_path;
         config.listen_path = config.listen_path.expand_tilde_owned()?;
+        config.log_file = config.log_file.map(|p| p.expand_tilde_owned()).transpose()?;
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()

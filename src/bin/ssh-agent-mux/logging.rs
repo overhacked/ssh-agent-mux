@@ -1,8 +1,8 @@
+use std::path::Path;
 use std::env;
 
 use flexi_logger::{
-    filter::{LogLineFilter, LogLineWriter},
-    FlexiLoggerError, LogSpecification, Logger, LoggerHandle,
+    filter::{LogLineFilter, LogLineWriter}, FileSpec, FlexiLoggerError, LogSpecification, Logger, LoggerHandle
 };
 use log::LevelFilter;
 
@@ -10,6 +10,12 @@ use log::LevelFilter;
 /// session-bind@openssh.com extension and ignore failure. We'd like to keep the ability log
 /// library errors but not cause lots of log noise on extension probing
 struct SuppressExtensionFailure;
+impl SuppressExtensionFailure {
+    fn log_matches(message: &str) -> bool {
+        !message.contains("Extension failure handling message")
+    }
+}
+
 impl LogLineFilter for SuppressExtensionFailure {
     fn write(
         &self,
@@ -17,18 +23,23 @@ impl LogLineFilter for SuppressExtensionFailure {
         record: &log::Record,
         log_line_writer: &dyn LogLineWriter,
     ) -> std::io::Result<()> {
-        if !record
-            .args()
-            .to_string()
-            .contains("Extension failure handling message")
-        {
-            log_line_writer.write(now, record)?;
+        let args = record.args();
+        // Optimize for zero allocation iff the log message can be
+        // accessed as a static string
+        let should_log = if let Some(s) = args.as_str() {
+            Self::log_matches(s)
+        } else {
+            Self::log_matches(&args.to_string())
+        };
+        if should_log {
+            log_line_writer.write(now, record)
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 }
 
-pub fn setup_logger(level: LevelFilter) -> Result<LoggerHandle, FlexiLoggerError> {
+pub fn setup_logger(level: LevelFilter, log_file: Option<&Path>) -> Result<LoggerHandle, FlexiLoggerError> {
     // If RUST_LOG is in the environment, follow its directives;
     // otherwise, use the configuration file, command line args, or defaults.
     let logger = if env::var_os("RUST_LOG").is_some() {
@@ -41,5 +52,10 @@ pub fn setup_logger(level: LevelFilter) -> Result<LoggerHandle, FlexiLoggerError
         Logger::with(logspec).filter(Box::new(SuppressExtensionFailure))
     };
 
-    logger.log_to_stdout().start()
+    if let Some(f) = log_file {
+        let file_spec = FileSpec::try_from(f)?;
+        logger.log_to_file(file_spec).start()
+    } else {
+        logger.log_to_stdout().start()
+    }
 }

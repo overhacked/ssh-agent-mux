@@ -30,9 +30,8 @@ async fn main() -> EyreResult<()> {
 
     let mut config = cli::Config::parse()?;
 
-    // stdout logging doesn't strictly require holding the LoggerHandle, but better to not
-    // ignore and drop it in case anyone adds file logging in the future
-    let _logger = logging::setup_logger(config.log_level.into())?;
+    // LoggerHandle must be held until program termination so file logging takes place
+    let _logger = logging::setup_logger(config.log_level.into(), config.log_file.as_deref())?;
 
     if config.service.any() {
         return service::handle_service_command(&config);
