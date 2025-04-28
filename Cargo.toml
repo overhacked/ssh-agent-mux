@@ -8,7 +8,7 @@ categories = ["command-line-utilities", "network-programming"]
 exclude = [".*"]
 version = "0.1.5" # bumped by release.sh
 edition = "2021"
-rust-version = "1.75.0"
+rust-version = "1.81.0"
 
 [dependencies]
 clap-serde-derive = "0.2.1"
