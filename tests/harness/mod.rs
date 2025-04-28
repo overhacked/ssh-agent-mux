@@ -24,6 +24,17 @@ pub struct SshAgentInstance {
     pub sock_path: TempPath,
 }
 
+fn map_binary_notfound_error(binary_name: &str, err: io::Error) -> io::Error {
+    if err.kind() == io::ErrorKind::NotFound {
+        io::Error::new(
+            err.kind(),
+            format!("{binary_name} not found in PATH; OpenSSH client not installed?")
+        )
+    } else {
+        err
+    }
+}
+
 impl SshAgentInstance {
     pub fn new<I, A>(agent_type: SshAgentType, args: I) -> io::Result<Self>
     where
@@ -73,6 +84,7 @@ impl SshAgentInstance {
 
     pub fn new_openssh() -> io::Result<Self> {
         Self::new(SshAgentType::OpenSsh, None::<&OsStr>)
+            .map_err(|e| map_binary_notfound_error("ssh-agent", e))
     }
 
     pub fn new_mux<I, A>(config: &str, args: I) -> io::Result<Self>
@@ -90,6 +102,7 @@ impl SshAgentInstance {
         config_args.extend(args);
 
         Self::new(SshAgentType::Mux, config_args)
+            .map_err(|e| map_binary_notfound_error(env!("CARGO_BIN_EXE_ssh-agent-mux"), e))
     }
 
     pub fn add(&self, key: &str) -> io::Result<()> {
@@ -97,7 +110,8 @@ impl SshAgentInstance {
         cmd!("ssh-add", "-q", "--", "-")
             .env("SSH_AUTH_SOCK", &self.sock_path)
             .stdin_bytes(key)
-            .run()?;
+            .run()
+            .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
 
         Ok(())
     }
@@ -107,7 +121,8 @@ impl SshAgentInstance {
             .env("SSH_AUTH_SOCK", &self.sock_path)
             .unchecked()
             .stdout_capture()
-            .run()?;
+            .run()
+            .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
         let stdout = output.stdout;
 
         match output.status.code() {
