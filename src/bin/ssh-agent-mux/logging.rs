@@ -1,8 +1,9 @@
-use std::path::Path;
 use std::env;
+use std::path::Path;
 
 use flexi_logger::{
-    filter::{LogLineFilter, LogLineWriter}, FileSpec, FlexiLoggerError, LogSpecification, Logger, LoggerHandle
+    filter::{LogLineFilter, LogLineWriter},
+    FileSpec, FlexiLoggerError, LogSpecification, Logger, LoggerHandle,
 };
 use log::LevelFilter;
 
@@ -39,7 +40,10 @@ impl LogLineFilter for SuppressExtensionFailure {
     }
 }
 
-pub fn setup_logger(level: LevelFilter, log_file: Option<&Path>) -> Result<LoggerHandle, FlexiLoggerError> {
+pub fn setup_logger(
+    level: LevelFilter,
+    log_file: Option<&Path>,
+) -> Result<LoggerHandle, FlexiLoggerError> {
     // If RUST_LOG is in the environment, follow its directives;
     // otherwise, use the configuration file, command line args, or defaults.
     let logger = if env::var_os("RUST_LOG").is_some() {

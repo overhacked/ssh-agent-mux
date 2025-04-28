@@ -205,7 +205,11 @@ impl MuxAgent {
                     known_keys.insert(id.pubkey.clone(), sock_path.clone());
                 }
             }
-            log::trace!("Got {} identities from {}", agent_identities.len(), sock_path.display());
+            log::trace!(
+                "Got {} identities from {}",
+                agent_identities.len(),
+                sock_path.display()
+            );
             identities.extend(agent_identities);
         }
 

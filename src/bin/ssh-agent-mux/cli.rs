@@ -83,7 +83,10 @@ impl Config {
 
         config.config_path = args.config_path;
         config.listen_path = config.listen_path.expand_tilde_owned()?;
-        config.log_file = config.log_file.map(|p| p.expand_tilde_owned()).transpose()?;
+        config.log_file = config
+            .log_file
+            .map(|p| p.expand_tilde_owned())
+            .transpose()?;
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()
@@ -102,7 +105,7 @@ pub enum LogLevel {
     Info = 3,
     Debug = 4,
     #[value(hide = true)]
-    Trace = 5
+    Trace = 5,
 }
 
 impl From<LogLevel> for LevelFilter {

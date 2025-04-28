@@ -28,7 +28,7 @@ fn map_binary_notfound_error(binary_name: &str, err: io::Error) -> io::Error {
     if err.kind() == io::ErrorKind::NotFound {
         io::Error::new(
             err.kind(),
-            format!("{binary_name} not found in PATH; OpenSSH client not installed?")
+            format!("{binary_name} not found in PATH; OpenSSH client not installed?"),
         )
     } else {
         err
