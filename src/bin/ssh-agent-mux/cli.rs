@@ -59,10 +59,10 @@ pub struct Config {
     // not in configuration file
     /// Config file path (not an arg; copied from struct Args)
     #[arg(skip)]
-    #[serde(skip_deserializing, skip_serializing)]
+    #[serde(skip)]
     pub config_path: PathBuf,
 
-    #[serde(skip_deserializing, skip_serializing)]
+    #[serde(skip)]
     #[command(flatten)]
     pub service: service::ServiceArgs,
 }
