@@ -39,5 +39,5 @@ version = "1.44.2"
 features = ["rt", "macros", "signal", "sync"]
 
 [dev-dependencies]
-duct = "0.13.7"
+duct = "1.0.0"
 tempfile = "3.19.1"
