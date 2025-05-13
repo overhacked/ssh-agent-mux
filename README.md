@@ -74,9 +74,9 @@ Service will automatically start as soon as it is installed.
 
 ```toml
 agent_sock_paths = [
-	"/Users/me/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock",
-	"/Users/me/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh",
-	"/Users/me/.ssh/yubikey-agent.sock",
+	"~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock",
+	"~/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh",
+	"~/.ssh/yubikey-agent.sock",
 ]
 ```
 
