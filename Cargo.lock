@@ -502,9 +502,9 @@ dependencies = [
 
 [[package]]
 name = "expand-tilde"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fe87936997d5c494d74ce2bfc9baf7f2ec25eda659f867364f29ad117a66b7d"
+checksum = "af42bffb99c712d4a07c17215b28e22f448b02e9d1481a8a5e05ebd837737f0c"
 dependencies = [
  "home",
  "thiserror 2.0.12",
