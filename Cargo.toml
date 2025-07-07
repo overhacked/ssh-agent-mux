@@ -35,7 +35,7 @@ version = "0.8.0"
 default-features = false
 
 [dependencies.tokio]
-version = "1.45.0"
+version = "1.46.1"
 features = ["rt", "macros", "signal", "sync"]
 
 [dev-dependencies]
