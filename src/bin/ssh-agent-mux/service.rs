@@ -122,7 +122,7 @@ fn write_new_config_file(config: &Config) -> Result<()> {
     if config.agent_sock_paths.is_empty() {
         match env::var("SSH_AUTH_SOCK") {
             Ok(v) => {
-                success_msg.write_str("with the current SSH_AUTh_SOCK as the upstream agent; please edit to add additional agents.")?;
+                success_msg.write_str("with the current SSH_AUTH_SOCK as the upstream agent; please edit to add additional agents.")?;
                 new_config.agent_sock_paths.push(v.into());
             }
             Err(e) => {
