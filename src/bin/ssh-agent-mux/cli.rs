@@ -1,11 +1,16 @@
-use std::{env, fs::File, io::Read, path::PathBuf};
+use std::{
+    env,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use clap_serde_derive::{
     clap::{self, Parser, ValueEnum},
     serde::{self, Deserialize, Serialize},
     ClapSerde,
 };
-use color_eyre::eyre::Result as EyreResult;
+use color_eyre::eyre::{eyre, Result as EyreResult};
 use expand_tilde::ExpandTilde;
 use log::LevelFilter;
 
@@ -81,16 +86,21 @@ impl Config {
             Config::from(&mut args.config)
         };
 
+        fn expand_path(p: &Path) -> EyreResult<PathBuf> {
+            let p = p
+                .to_str()
+                .ok_or_else(|| eyre!("failed to convert {} to str", p.display()))?;
+            let expanded = shellexpand::full(p)?;
+            Ok(PathBuf::from(&expanded as &str))
+        }
+
         config.config_path = args.config_path;
         config.listen_path = config.listen_path.expand_tilde_owned()?;
-        config.log_file = config
-            .log_file
-            .map(|p| p.expand_tilde_owned())
-            .transpose()?;
+        config.log_file = config.log_file.map(|p| expand_path(&p)).transpose()?;
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()
-            .map(|p| p.expand_tilde_owned())
+            .map(|p| expand_path(&p))
             .collect::<Result<_, _>>()?;
 
         Ok(config)
