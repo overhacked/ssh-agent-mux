@@ -23,7 +23,7 @@ default-features = false
 features = ["track-caller"]
 
 [dependencies.log]
-version = "0.4.27"
+version = "0.4.28"
 features = ["std"]
 
 [dependencies.serde]
