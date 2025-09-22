@@ -27,7 +27,7 @@ version = "0.4.27"
 features = ["std"]
 
 [dependencies.serde]
-version = "1.0.145"
+version = "1.0.226"
 features = ["derive"]
 
 [dependencies.service-manager]
