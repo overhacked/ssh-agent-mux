@@ -13,7 +13,7 @@ rust-version = "1.81.0"
 [dependencies]
 clap-serde-derive = "0.2.1"
 expand-tilde = "0.6.0"
-flexi_logger = "0.30.1"
+flexi_logger = "0.31.4"
 ssh-agent-lib = "0.5.1"
 toml = "0.8.22"
 
