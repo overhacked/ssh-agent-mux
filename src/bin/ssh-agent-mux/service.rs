@@ -2,7 +2,7 @@ use std::{env, fmt::Write, fs, io, path::PathBuf};
 
 use clap_serde_derive::clap::{self, Args};
 use color_eyre::{
-    eyre::{bail, eyre, Result},
+    eyre::{bail, eyre, Context, Result},
     Section,
 };
 use service_manager::{
@@ -149,6 +149,18 @@ fn write_new_config_file(config: &Config) -> Result<()> {
 
     println!("{}", success_msg);
     let new_config_toml = toml::to_string_pretty(&new_config)?;
+    if let Some(config_dir) = config.config_path.parent() {
+        if !config_dir.is_dir() {
+            if let Err(e) = fs::create_dir(config_dir) {
+                match config_dir.parent() {
+                    Some(p) if !p.is_dir() => {
+                        Err(e).wrap_err(format!("Failed to create configuration directory, because parent directory does not exist ({})", p.display()))?;
+                    }
+                    _ => Err(e)?,
+                }
+            }
+        }
+    }
     fs::write(&config.config_path, new_config_toml.as_bytes())?;
     Ok(())
 }
