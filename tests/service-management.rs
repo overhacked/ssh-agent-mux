@@ -7,6 +7,8 @@ use std::{
 use duct::cmd;
 use tempfile::TempDir;
 
+const CRATE_MAIN_BIN: &str = env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME")));
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn make_fake_home() -> Result<TempDir, io::Error> {
@@ -20,7 +22,7 @@ fn run_in_fake_home(
     home: &TempDir,
     args: &'static [&str],
 ) -> Result<Output, Box<dyn std::error::Error>> {
-    let cmd_result = cmd!(env!("CARGO_BIN_EXE_ssh-agent-mux"), "--log-level", "trace")
+    let cmd_result = cmd!(CRATE_MAIN_BIN, "--log-level", "trace")
         .before_spawn(move |cmd| {
             cmd.args(args);
             Ok(())
