@@ -4,7 +4,7 @@ use std::{
     process::Output,
 };
 
-use duct::cmd;
+use duct::{cmd, Expression};
 use tempfile::TempDir;
 
 const CRATE_MAIN_BIN: &str = env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME")));
@@ -18,11 +18,8 @@ fn make_fake_home() -> Result<TempDir, io::Error> {
     Ok(fake_home)
 }
 
-fn run_in_fake_home(
-    home: &TempDir,
-    args: &'static [&str],
-) -> Result<Output, Box<dyn std::error::Error>> {
-    let cmd_result = cmd!(CRATE_MAIN_BIN, "--log-level", "trace")
+fn cmd_in_fake_home(home: &TempDir, args: &'static [&str]) -> Expression {
+    cmd!(CRATE_MAIN_BIN, "--log-level", "trace")
         .before_spawn(move |cmd| {
             cmd.args(args);
             Ok(())
@@ -34,9 +31,6 @@ fn run_in_fake_home(
         .stdout_capture()
         .stderr_capture()
         .unchecked()
-        .run()?;
-
-    Ok(cmd_result)
 }
 
 fn dump_command_output(output: &Output) -> Result<(), Box<dyn std::error::Error>> {
@@ -49,9 +43,12 @@ fn dump_command_output(output: &Output) -> Result<(), Box<dyn std::error::Error>
 fn install_config() -> TestResult {
     let temp_home = make_fake_home()?;
     let temp_xdg_config_home = temp_home.path().join(".config");
+    let fake_ssh_auth_sock = temp_home.path().join(".ssh/fake.sock");
     fs::create_dir(&temp_xdg_config_home)?;
 
-    let output = run_in_fake_home(&temp_home, &["--install-config"])?;
+    let output = cmd_in_fake_home(&temp_home, &["--install-config"])
+        .env("SSH_AUTH_SOCK", &fake_ssh_auth_sock)
+        .run()?;
     if !output.status.success() {
         dump_command_output(&output)?;
         Err("Failed to install configuration file")?;
@@ -68,6 +65,19 @@ fn install_config() -> TestResult {
             env!("CARGO_PKG_NAME"),
             expected_config_file.display()
         ))?;
+    } else {
+        let config_contents = fs::read(&expected_config_file)?;
+        let config_string = String::from_utf8_lossy(&config_contents);
+        if !config_string.contains(fake_ssh_auth_sock.to_str().unwrap()) {
+            dump_command_output(&output)?;
+            let _ = temp_home.keep();
+            Err(format!(
+                "`{} --install-config` reported success, but config file ({}) does not contain expect SSH_AUTH_SOCK path: {}",
+                env!("CARGO_PKG_NAME"),
+                expected_config_file.display(),
+                fake_ssh_auth_sock.display(),
+            ))?;
+        }
     }
 
     Ok(())
@@ -77,7 +87,9 @@ fn install_config() -> TestResult {
 fn missing_dot_config_dir() -> TestResult {
     let temp_home = make_fake_home()?;
 
-    let output = run_in_fake_home(&temp_home, &["--install-config"])?;
+    let output = cmd_in_fake_home(&temp_home, &["--install-config"])
+        .env("SSH_AUTH_SOCK", temp_home.path().join(".ssh/fake.sock"))
+        .run()?;
     if output.status.success() {
         Err(format!(
             "Failed to detect missing .config directory in {}",
@@ -85,6 +97,45 @@ fn missing_dot_config_dir() -> TestResult {
         ))?;
     }
     if !String::from_utf8_lossy(&output.stderr).contains("parent directory does not exist") {
+        dump_command_output(&output)?;
+        Err("Expected error output not found")?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn missing_ssh_auth_sock() -> TestResult {
+    let temp_home = make_fake_home()?;
+
+    let output = cmd_in_fake_home(&temp_home, &["--install-config"])
+        .env_remove("SSH_AUTH_SOCK")
+        .run()?;
+    if output.status.success() {
+        Err("Failed to detect missing SSH_AUTH_SOCK environment variable")?;
+    }
+    if !String::from_utf8_lossy(&output.stderr).contains("SSH_AUTH_SOCK is not in the environment")
+    {
+        dump_command_output(&output)?;
+        Err("Expected error output not found")?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn blank_ssh_auth_sock() -> TestResult {
+    let temp_home = make_fake_home()?;
+
+    let output = cmd_in_fake_home(&temp_home, &["--install-config"])
+        .env("SSH_AUTH_SOCK", "")
+        .run()?;
+    if output.status.success() {
+        Err("Failed to detect blank SSH_AUTH_SOCK environment variable")?;
+    }
+    if !String::from_utf8_lossy(&output.stderr)
+        .contains("SSH_AUTH_SOCK is defined, but the value is blank")
+    {
         dump_command_output(&output)?;
         Err("Expected error output not found")?;
     }

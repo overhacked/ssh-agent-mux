@@ -117,27 +117,31 @@ fn write_new_config_file(config: &Config) -> Result<()> {
         "Automatically creating configuration file at {} ",
         config.config_path.display()
     );
+    let mut error_msg = String::from("A new configuration file cannot be created: ");
 
     let mut new_config = config.clone();
     if config.agent_sock_paths.is_empty() {
         match env::var("SSH_AUTH_SOCK") {
+            Ok(v) if v.is_empty() => {
+                error_msg.write_str("SSH_AUTH_SOCK is defined, but the value is blank.")?;
+                bail!(error_msg);
+            }
             Ok(v) => {
-                success_msg.write_str("with the current SSH_AUTh_SOCK as the upstream agent; please edit to add additional agents.")?;
+                success_msg.write_str("with the current SSH_AUTH_SOCK as the upstream agent; please edit to add additional agents.")?;
                 new_config.agent_sock_paths.push(v.into());
             }
             Err(e) => {
-                let mut emsg = String::from("A new configuration file cannot be created: ");
                 match e {
                     env::VarError::NotPresent => {
-                        emsg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?;
+                        error_msg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?;
                     }
                     env::VarError::NotUnicode(_) => {
-                        emsg.write_str(
+                        error_msg.write_str(
                             "SSH_AUTH_SOCK is defined, but contains non-UTF-8 characters.",
                         )?;
                     }
                 }
-                bail!(emsg);
+                bail!(error_msg);
             }
         };
     } else {
