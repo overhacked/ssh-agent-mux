@@ -2,7 +2,7 @@ use std::{env, fmt::Write, fs, io, path::PathBuf};
 
 use clap_serde_derive::clap::{self, Args};
 use color_eyre::{
-    eyre::{bail, eyre, Result},
+    eyre::{bail, eyre, Context, Result},
     Section,
 };
 use service_manager::{
@@ -117,27 +117,31 @@ fn write_new_config_file(config: &Config) -> Result<()> {
         "Automatically creating configuration file at {} ",
         config.config_path.display()
     );
+    let mut error_msg = String::from("A new configuration file cannot be created: ");
 
     let mut new_config = config.clone();
     if config.agent_sock_paths.is_empty() {
         match env::var("SSH_AUTH_SOCK") {
+            Ok(v) if v.is_empty() => {
+                error_msg.write_str("SSH_AUTH_SOCK is defined, but the value is blank.")?;
+                bail!(error_msg);
+            }
             Ok(v) => {
-                success_msg.write_str("with the current SSH_AUTh_SOCK as the upstream agent; please edit to add additional agents.")?;
+                success_msg.write_str("with the current SSH_AUTH_SOCK as the upstream agent; please edit to add additional agents.")?;
                 new_config.agent_sock_paths.push(v.into());
             }
             Err(e) => {
-                let mut emsg = String::from("A new configuration file cannot be created: ");
                 match e {
                     env::VarError::NotPresent => {
-                        emsg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?;
+                        error_msg.write_str("SSH_AUTH_SOCK is not in the environment, and no upstream agent paths were specified on the command line.")?;
                     }
                     env::VarError::NotUnicode(_) => {
-                        emsg.write_str(
+                        error_msg.write_str(
                             "SSH_AUTH_SOCK is defined, but contains non-UTF-8 characters.",
                         )?;
                     }
                 }
-                bail!(emsg);
+                bail!(error_msg);
             }
         };
     } else {
@@ -149,6 +153,18 @@ fn write_new_config_file(config: &Config) -> Result<()> {
 
     println!("{}", success_msg);
     let new_config_toml = toml::to_string_pretty(&new_config)?;
+    if let Some(config_dir) = config.config_path.parent() {
+        if !config_dir.is_dir() {
+            if let Err(e) = fs::create_dir(config_dir) {
+                match config_dir.parent() {
+                    Some(p) if !p.is_dir() => {
+                        Err(e).wrap_err(format!("Failed to create configuration directory, because parent directory does not exist ({})", p.display()))?;
+                    }
+                    _ => Err(e)?,
+                }
+            }
+        }
+    }
     fs::write(&config.config_path, new_config_toml.as_bytes())?;
     Ok(())
 }

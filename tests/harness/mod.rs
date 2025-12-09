@@ -8,6 +8,7 @@ use std::{
 use duct::{cmd, unix::HandleExt, Handle};
 use tempfile::TempPath;
 
+const CRATE_MAIN_BIN: &str = env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME")));
 const AGENT_TIMEOUT: Duration = Duration::from_secs(2);
 const AGENT_POLL: Duration = Duration::from_micros(100);
 const SIGTERM: std::ffi::c_int = 15;
@@ -51,7 +52,7 @@ impl SshAgentInstance {
         let cmd = match agent_type {
             SshAgentType::OpenSsh => cmd!("ssh-agent", "-d", "-a", &sock_path),
             SshAgentType::Mux => cmd!(
-                env!("CARGO_BIN_EXE_ssh-agent-mux"),
+                CRATE_MAIN_BIN,
                 "--log-level",
                 "trace",
                 "--listen",
@@ -102,7 +103,7 @@ impl SshAgentInstance {
         config_args.extend(args);
 
         Self::new(SshAgentType::Mux, config_args)
-            .map_err(|e| map_binary_notfound_error(env!("CARGO_BIN_EXE_ssh-agent-mux"), e))
+            .map_err(|e| map_binary_notfound_error(CRATE_MAIN_BIN, e))
     }
 
     pub fn add(&self, key: &str) -> io::Result<()> {
