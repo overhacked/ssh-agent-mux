@@ -1,11 +1,11 @@
-use std::{env, fs::File, io::Read, path::PathBuf};
+use std::{env, ffi::OsStr, fs::File, io::Read, os::unix::ffi::OsStrExt, path::PathBuf};
 
 use clap_serde_derive::{
     clap::{self, Parser, ValueEnum},
     serde::{self, Deserialize, Serialize},
     ClapSerde,
 };
-use color_eyre::eyre::Result as EyreResult;
+use color_eyre::eyre::{bail, Result as EyreResult};
 use expand_tilde::ExpandTilde;
 use log::LevelFilter;
 
@@ -21,6 +21,25 @@ fn default_config_path() -> PathBuf {
     config_dir
         .join(env!("CARGO_PKG_NAME"))
         .join(concat!(env!("CARGO_PKG_NAME"), ".toml"))
+}
+
+fn expand_path_env_tilde(path: PathBuf) -> EyreResult<PathBuf> {
+    let path_bytes = path.as_os_str().as_bytes();
+    let path = if let Some(env_var) = path_bytes
+        .strip_prefix(b"${")
+        .and_then(|p| p.strip_suffix(b"}"))
+    {
+        let env_var = OsStr::from_bytes(env_var);
+        match env::var_os(env_var) {
+            Some(val) => PathBuf::from(val),
+            None => bail!("{env_var:?} not set in the environment"),
+        }
+    } else {
+        path
+    };
+    let path = path.expand_tilde_owned()?;
+
+    Ok(path)
 }
 
 #[derive(Parser)]
@@ -90,7 +109,7 @@ impl Config {
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()
-            .map(|p| p.expand_tilde_owned())
+            .map(expand_path_env_tilde)
             .collect::<Result<_, _>>()?;
 
         Ok(config)

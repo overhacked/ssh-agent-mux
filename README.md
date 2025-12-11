@@ -74,9 +74,9 @@ Service will automatically start as soon as it is installed.
 
 ```toml
 agent_sock_paths = [
-	"~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock",
-	"~/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh",
-	"~/.ssh/yubikey-agent.sock",
+    "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock",
+    "~/Library/Containers/com.maxgoedjen.Secretive.SecretAgent/Data/socket.ssh",
+    "~/.ssh/yubikey-agent.sock",
 ]
 ```
 
@@ -93,6 +93,17 @@ $ ssh-agent-mux --help
 #### `agent_sock_paths` *[Array](https://toml.io/en/v1.0.0#array)*
 
 Socket paths of upstream SSH agents to combine keys from. Must be specified as absolute paths. The order of `agent_sock_paths` affects the order in which public keys are offered to an SSH server. If keys from multiple agents are listed on the server in your `authorized_keys` file, the agent listed first will be the one selected to authenticate with the server.
+
+As a special case, any of the paths can be specified as a shell-style reference to an environment variable, for example:
+
+```toml
+agent_sock_paths = [
+    "${SSH_AUTH_SOCK}",
+    "~/.ssh/yubikey-agent.sock",
+]
+```
+
+Environment variable references can only appear as the entire path; variables are not interpreted in the middle of an otherwise static path.
 
 #### `listen_path` *[String](https://toml.io/en/v1.0.0#string)*
 
