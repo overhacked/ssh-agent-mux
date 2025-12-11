@@ -94,16 +94,15 @@ $ ssh-agent-mux --help
 
 Socket paths of upstream SSH agents to combine keys from. Must be specified as absolute paths. The order of `agent_sock_paths` affects the order in which public keys are offered to an SSH server. If keys from multiple agents are listed on the server in your `authorized_keys` file, the agent listed first will be the one selected to authenticate with the server.
 
-As a special case, any of the paths can be specified as a shell-style reference to an environment variable, for example:
+Any of the paths can contain a shell-style reference to an environment variable, for example:
 
 ```toml
 agent_sock_paths = [
     "${SSH_AUTH_SOCK}",
+    "${SOME_DIRECTORY}/mystery-agent.sock",
     "~/.ssh/yubikey-agent.sock",
 ]
 ```
-
-Environment variable references can only appear as the entire path; variables are not interpreted in the middle of an otherwise static path.
 
 #### `listen_path` *[String](https://toml.io/en/v1.0.0#string)*
 
