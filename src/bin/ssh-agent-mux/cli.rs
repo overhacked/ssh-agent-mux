@@ -10,22 +10,25 @@ use clap_serde_derive::{
     serde::{self, Deserialize, Serialize},
     ClapSerde,
 };
-use color_eyre::eyre::{eyre, Result as EyreResult};
-use expand_tilde::ExpandTilde;
+use color_eyre::eyre::Result as EyreResult;
 use log::LevelFilter;
 
 use crate::service;
 
 fn default_config_path() -> PathBuf {
     let config_dir = env::var_os("XDG_CONFIG_HOME")
-        .or_else(|| Some("~/.config".into()))
         .map(PathBuf::from)
-        .and_then(|p| p.expand_tilde_owned().ok())
-        .expect("HOME not defined in environment");
+        .unwrap_or_else(|| "~/.config".into());
 
     config_dir
         .join(env!("CARGO_PKG_NAME"))
         .join(concat!(env!("CARGO_PKG_NAME"), ".toml"))
+}
+
+fn expand_path(path: impl AsRef<Path>) -> EyreResult<PathBuf> {
+    shellexpand::path::full(path.as_ref())
+        .map(|p| p.into_owned())
+        .map_err(|e| e.into())
 }
 
 #[derive(Parser)]
@@ -75,6 +78,7 @@ pub struct Config {
 impl Config {
     pub fn parse() -> EyreResult<Self> {
         let mut args = Args::parse();
+        args.config_path = expand_path(args.config_path)?;
 
         let mut config = if let Ok(mut f) = File::open(&args.config_path) {
             log::info!("Read configuration from {}", args.config_path.display());
@@ -86,21 +90,13 @@ impl Config {
             Config::from(&mut args.config)
         };
 
-        fn expand_path(p: &Path) -> EyreResult<PathBuf> {
-            let p = p
-                .to_str()
-                .ok_or_else(|| eyre!("failed to convert {} to str", p.display()))?;
-            let expanded = shellexpand::full(p)?;
-            Ok(PathBuf::from(&expanded as &str))
-        }
-
         config.config_path = args.config_path;
-        config.listen_path = config.listen_path.expand_tilde_owned()?;
-        config.log_file = config.log_file.map(|p| expand_path(&p)).transpose()?;
+        config.listen_path = expand_path(config.listen_path)?;
+        config.log_file = config.log_file.map(expand_path).transpose()?;
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()
-            .map(|p| expand_path(&p))
+            .map(expand_path)
             .collect::<Result<_, _>>()?;
 
         Ok(config)
@@ -127,5 +123,50 @@ impl From<LogLevel> for LevelFilter {
             LogLevel::Debug => LevelFilter::Debug,
             LogLevel::Trace => LevelFilter::Trace,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FAKE_ENV_VAR: &str = "CARGO_TEST_EXAMPLE";
+    const FAKE_SOCK_PATH: &str = "/path/to/nonexistent/socket.sock";
+
+    #[test]
+    fn expand_env_variable() {
+        env::set_var(FAKE_ENV_VAR, FAKE_SOCK_PATH);
+        let to_be_expanded = PathBuf::from(format!("${{{FAKE_ENV_VAR}}}"));
+        let expected = PathBuf::from(FAKE_SOCK_PATH);
+        let actual = expand_path(to_be_expanded).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn expand_tilde() {
+        env::set_var("HOME", "/home/fake");
+        let to_be_expanded = PathBuf::from("~/subdir_in_home");
+        let expected = PathBuf::from("/home/fake/subdir_in_home");
+        let actual = expand_path(to_be_expanded).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn expand_env_multiple() {
+        env::set_var("CARGO_TEST_VAR_1", "one");
+        env::set_var("CARGO_TEST_VAR_2", "two");
+        let to_be_expanded = PathBuf::from("{${CARGO_TEST_VAR_1}.${CARGO_TEST_VAR_2}}");
+        let expected = PathBuf::from("{one.two}");
+        let actual = expand_path(to_be_expanded).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn expand_env_escaping() {
+        env::set_var(FAKE_ENV_VAR, FAKE_SOCK_PATH);
+        let to_be_expanded = PathBuf::from(format!("$${{{FAKE_ENV_VAR}}}"));
+        let expected = PathBuf::from(format!("${{{FAKE_ENV_VAR}}}"));
+        let actual = expand_path(to_be_expanded).unwrap();
+        assert_eq!(actual, expected);
     }
 }
