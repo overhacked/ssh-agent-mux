@@ -41,11 +41,11 @@ body = """
 {%- endif -%}
 
 {% for contributor in github.contributors | filter(attribute="is_first_time", value=true) %}
-  * @{{ contributor.username }} made their first contribution
+  - @{{ contributor.username }} made their first contribution
     {%- if contributor.pr_number %} in \
       [#{{ contributor.pr_number }}]({{ self::remote_url() }}/pull/{{ contributor.pr_number }}) \
     {%- endif %}
-{%- endfor %}\n
+{% endfor %}\n
 """
 # template for the changelog footer
 footer = """
@@ -79,6 +79,7 @@ commit_preprocessors = [
 # regex for parsing and grouping commits
 commit_parsers = [
     { message = '^chore\(release\):', skip = true },
+    { message = '^chore\([^)]*\bdeps\b[^)]*\):', group = "Dependencies" },
     { message = '^[aA]dd', group = "Added" },
     { message = '^[sS]upport', group = "Added" },
     { message = '^[rR]emove', group = "Removed" },
@@ -86,6 +87,7 @@ commit_parsers = [
     { message = '^.*: [sS]upport', group = "Added" },
     { message = '^.*: [rR]emove', group = "Removed" },
     { message = '^.*: [dD]elete', group = "Removed" },
+    { message = '^feat', group = "Added" },
     { message = '^test', group = "Fixed" },
     { message = '^fix', group = "Fixed" },
     { message = '^.*: fix', group = "Fixed" },
