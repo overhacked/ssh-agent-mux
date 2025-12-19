@@ -2,26 +2,21 @@
 
 set -e
 
-if [ -z "$1" ]; then
-	echo "Please provide a tag."
-	echo "Usage: ./release.sh v[X.Y.Z]"
-	exit 2
-fi
-
-echo "Preparing $1..."
+echo "Preparing release..."
 # update the version
+version=$(git cliff --bumped-version)
 msg="# bumped by release.sh"
-sed -E -i '' -e "s/^version = .* $msg\$/version = \"${1#v}\" $msg/" Cargo.toml
+sed -E -i '' -e "s/^version = .* $msg\$/version = \"${version#v}\" $msg/" Cargo.toml
 cargo build
 # update the changelog
-git cliff --tag "$1" --output CHANGELOG.md v0.0.0..
+git cliff --bump --output CHANGELOG.md -- v0.0.0..
 git add -A
-git commit -m "chore(release): prepare for $1"
+git commit -m "chore(release): prepare for $version"
 git show
 # generate a changelog for the tag message
-changelog=$(git cliff --tag "$1" --unreleased --strip all | sed -e '/^#/d' -e '/^$/d')
+changelog=$(git cliff --bump --unreleased --strip all | sed -e '/^#/d' -e '/^$/d')
 # create a signed tag
-git tag -f -s -a "$1" -m "Release $1" -m "$changelog"
-#git tag -v "$1"
+git tag -f -s -a "$version" -m "Release $version" -m "$changelog"
+#git tag -v "$version"
 echo "Done!"
 echo "Now push the commit (git push) and the tag (git push --tags)."

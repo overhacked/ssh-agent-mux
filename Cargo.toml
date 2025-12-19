@@ -6,7 +6,7 @@ license = "Apache-2.0 OR BSD-3-Clause"
 keywords = ["ssh", "ssh-agent", "authentication"]
 categories = ["command-line-utilities", "network-programming"]
 exclude = [".*"]
-version = "0.1.6" # bumped by release.sh
+version = "0.2.0" # bumped by release.sh
 edition = "2021"
 rust-version = "1.83.0"
 
