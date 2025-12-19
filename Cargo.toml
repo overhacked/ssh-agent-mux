@@ -34,7 +34,7 @@ version = "1.0.228"
 features = ["derive"]
 
 [dependencies.service-manager]
-version = "0.8.0"
+version = "0.10.0"
 default-features = false
 
 [dependencies.tokio]
