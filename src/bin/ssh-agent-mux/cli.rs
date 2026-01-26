@@ -1,5 +1,6 @@
 use std::{
     env,
+    ffi::OsStr,
     fs::File,
     io::Read,
     path::{Path, PathBuf},
@@ -55,11 +56,21 @@ pub struct Config {
     #[arg(long, value_enum)]
     pub log_level: LogLevel,
 
-    /// Optional log file for agent (logs to standard output, otherwise)
+    /// Optional log file for agent
+    ///
+    /// Logs to standard output, otherwise. Specify "-" as
+    /// filename to override configuration and log to standard output)
     #[arg(long, num_args = 1)]
     pub log_file: Option<PathBuf>,
 
     /// Agent sockets to multiplex
+    ///
+    /// Must be specified as absolute paths. Any of the paths can contain a shell-style reference
+    /// to an environment variable or start with "~" for the home directory.
+    ///
+    /// The order affects the order in which public keys are offered to an SSH server. If keys from
+    /// multiple agents are listed on an SSH server in your `authorized_keys` file, the agent listed
+    /// first here will be the one selected to authenticate with the server.
     #[arg()]
     pub agent_sock_paths: Vec<PathBuf>,
 
@@ -92,7 +103,11 @@ impl Config {
 
         config.config_path = args.config_path;
         config.listen_path = expand_path(config.listen_path)?;
-        config.log_file = config.log_file.map(expand_path).transpose()?;
+        config.log_file = config
+            .log_file
+            .filter(|p| p != OsStr::new("-"))
+            .map(expand_path)
+            .transpose()?;
         config.agent_sock_paths = config
             .agent_sock_paths
             .into_iter()

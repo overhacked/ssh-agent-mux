@@ -18,19 +18,19 @@ const SERVICE_IDENT: &str = concat!("net.ross-williams.", env!("CARGO_PKG_NAME")
 #[group(multiple = false)]
 pub struct ServiceArgs {
     /// Install the user service manager configuration
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pub install_service: bool,
 
     /// Start the service if it is not started
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pub restart_service: bool,
 
     /// Uninstall the user service manager configuration
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pub uninstall_service: bool,
 
     /// Install the user service manager configuration
-    #[arg(long)]
+    #[arg(long, hide_short_help = true)]
     pub install_config: bool,
 }
 
