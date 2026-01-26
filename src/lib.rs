@@ -237,6 +237,9 @@ struct SelfDeletingUnixListener {
 impl SelfDeletingUnixListener {
     fn bind(path: impl AsRef<Path>) -> std::io::Result<Self> {
         let path = path.as_ref().to_path_buf();
+        if std::fs::remove_file(&path).is_ok() {
+            log::debug!("Deleted existing socket {}", path.display());
+        }
         UnixListener::bind(&path).map(|listener| Self { path, listener })
     }
 }
