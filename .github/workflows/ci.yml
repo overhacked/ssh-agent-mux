@@ -52,9 +52,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - build: pinned
+        - build: msrv
           os: ubuntu-latest
-          rust: 1.83.0
+          rust: msrv
         - build: stable
           os: ubuntu-latest
           rust: stable
@@ -90,10 +90,18 @@ jobs:
       run: |
         ci/ubuntu-install-packages
 
+    - name: Check MSRV in Cargo.toml
+      if: matrix.rust == 'msrv'
+      uses: SebRollen/toml-action@v1.2.0
+      id: read_msrv
+      with:
+        file: 'Cargo.toml'
+        field: 'package.rust-version'
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ matrix.rust }}
+        toolchain: ${{ case(matrix.rust == 'msrv', steps.read_msrv.outputs.value, matrix.rust) }}
 
     - name: Use Cross
       if: matrix.os == 'ubuntu-latest' && matrix.target != ''
