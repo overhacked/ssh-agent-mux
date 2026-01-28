@@ -122,6 +122,7 @@ impl SshAgentInstance {
             .env("SSH_AUTH_SOCK", &self.sock_path)
             .unchecked()
             .stdout_capture()
+            .stderr_capture()
             .run()
             .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
         let stdout = output.stdout;
@@ -141,13 +142,22 @@ impl SshAgentInstance {
                 Ok(lines)
             }
             Some(1) if stdout.starts_with(b"The agent has no identities.") => Ok(vec![]),
-            Some(c) => Err(io::Error::other(format!(
-                "command ssh-add -L exited with code {c}; output:\n{}",
-                String::from_utf8_lossy(&stdout)
-            ))),
-            None => Err(io::Error::other(
-                "command ssh-add -L exited with an unknown status",
-            )),
+            other_code => {
+                println!(
+                    "`ssh-add -L` output:\n{}{}{}{}",
+                    String::from_utf8_lossy(&stdout),
+                    if !stdout.is_empty() { "\n" } else { "" },
+                    String::from_utf8_lossy(&output.stderr),
+                    if !output.stderr.is_empty() { "\n" } else { "" }
+                );
+                Err(io::Error::other(format!(
+                    "command ssh-add -L exited with {}",
+                    other_code.map_or_else(
+                        || String::from("an unknown status"),
+                        |c| format!("code {c}"),
+                    )
+                )))
+            }
         }
     }
 }
