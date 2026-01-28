@@ -1,6 +1,6 @@
 use std::{ffi::OsString, io};
 
-use harness::SshAgentInstance;
+use harness::{SshAgentInstance, SshPkiKeygen};
 
 mod harness;
 mod keys;
@@ -18,6 +18,19 @@ fn make_openssh_agent_with_keys() -> io::Result<SshAgentInstance> {
     Ok(agent)
 }
 
+fn make_openssh_agent_with_certs() -> io::Result<SshAgentInstance> {
+    let agent = SshAgentInstance::new_openssh()?;
+    println!("{:#?}", agent);
+
+    let mut pki = SshPkiKeygen::new()?;
+    for key in keys::PRIVATE {
+        let cert = pki.sign(key)?;
+        agent.add_cert(key, cert)?;
+    }
+
+    Ok(agent)
+}
+
 fn assert_all_keys_in_agent(agent: &SshAgentInstance) -> TestResult {
     let keys_in_agent = agent.list()?;
     for key in keys::PUBLIC {
@@ -30,6 +43,15 @@ fn assert_all_keys_in_agent(agent: &SshAgentInstance) -> TestResult {
 #[test]
 fn add_keys_to_openssh_agent() -> TestResult {
     let agent = make_openssh_agent_with_keys()?;
+
+    assert_all_keys_in_agent(&agent)?;
+
+    Ok(())
+}
+
+#[test]
+fn add_certs_to_openssh_agent() -> TestResult {
+    let agent = make_openssh_agent_with_certs()?;
 
     assert_all_keys_in_agent(&agent)?;
 
@@ -82,6 +104,22 @@ fn mux_with_three_agents() -> TestResult {
     )?;
 
     assert_all_keys_in_agent(dbg!(&mux_agent))?;
+
+    Ok(())
+}
+
+#[test]
+fn mux_with_one_agent_with_certs() -> TestResult {
+    let openssh_agent = make_openssh_agent_with_certs()?;
+    let mux_agent = SshAgentInstance::new_mux(
+        &format!(
+            r##"agent_sock_paths = ["{}"]"##,
+            openssh_agent.sock_path.display()
+        ),
+        None::<OsString>,
+    )?;
+
+    assert_all_keys_in_agent(&mux_agent)?;
 
     Ok(())
 }
