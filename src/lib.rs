@@ -73,11 +73,16 @@ impl Session for MuxAgent {
                                     log::warn!("session-bind@openssh.com request succeeded on socket <{}>, but an invalid response was received", sock_path.display());
                                 }
                             }
-                            // Don't propagate upstream lack of extension support
-                            Err(AgentError::Failure) => continue,
+                            // Don't propagate upstream lack of extension support.
+                            // Agents may signal this as Failure or as an unsupported
+                            // command protocol error (e.g. rbw, KeePassXC).
+                            Err(AgentError::Failure)
+                            | Err(AgentError::Proto(
+                                ssh_agent_lib::proto::Error::UnsupportedCommand { .. },
+                            )) => continue,
                             // Report but ignore any unexpected errors
                             Err(e) => {
-                                log::error!("Unexpected error on socket <{}> when requesting session-bind@openssh.com extension: {}", sock_path.display(), e);
+                                log::warn!("Extension session-bind@openssh.com not supported by socket <{}>: {}", sock_path.display(), e);
                                 continue;
                             }
                         }
