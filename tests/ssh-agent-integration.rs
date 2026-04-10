@@ -1,5 +1,6 @@
 use std::{ffi::OsString, io};
 
+use duct::cmd;
 use harness::SshAgentInstance;
 
 mod harness;
@@ -58,6 +59,49 @@ fn mux_with_one_agent() -> TestResult {
     )?;
 
     assert_all_keys_in_agent(&mux_agent)?;
+
+    Ok(())
+}
+
+/// Regression test for issue #90: mux agent must handle
+/// SSH_AGENTC_ADD_ID_CONSTRAINED (command 25), which is sent by ssh-add when
+/// the -t flag (lifetime) or -c flag (confirm) is used.
+///
+/// The mux proxies the constrained-add to all upstream agents; the key must
+/// then appear when listing through the mux.
+#[test]
+fn add_constrained_key_to_mux() -> TestResult {
+    let tmpdir = tempfile::TempDir::new()?;
+    let key_path = tmpdir.path().join("test_key");
+
+    cmd!("ssh-keygen", "-t", "ed25519", "-f", &key_path, "-N", "")
+        .stdout_null()
+        .stderr_null()
+        .run()
+        .map_err(io::Error::other)?;
+
+    // A real upstream agent is required: the mux has no local key storage and
+    // forwards add operations to its upstreams.
+    let upstream = SshAgentInstance::new_openssh()?;
+
+    let mux_agent = SshAgentInstance::new_mux(
+        &format!(
+            r##"agent_sock_paths = ["{}"]"##,
+            upstream.sock_path.display()
+        ),
+        None::<OsString>,
+    )?;
+
+    // -t 3600 triggers SSH_AGENTC_ADD_ID_CONSTRAINED (command 25) instead of
+    // the plain SSH_AGENTC_ADD_IDENTITY (command 17).
+    mux_agent.add_timed(&key_path, 3600)?;
+
+    // The constrained key must be visible when listing through the mux.
+    let keys = mux_agent.list()?;
+    assert!(
+        !keys.is_empty(),
+        "constrained key was not added to the mux agent"
+    );
 
     Ok(())
 }

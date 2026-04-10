@@ -9,7 +9,7 @@ use ssh_agent_lib::{
     agent::{self, Agent, ListeningSocket, Session},
     client,
     error::AgentError,
-    proto::{extension::QueryResponse, Extension, Identity, SignRequest},
+    proto::{extension::QueryResponse, AddIdentity, AddIdentityConstrained, Extension, Identity, SignRequest},
     ssh_key::{public::KeyData as PubKeyData, Signature},
 };
 use tokio::{
@@ -50,6 +50,23 @@ impl Session for MuxAgent {
                 format!("No agent found for public key: {}", &fingerprint).into(),
             ))
         }
+    }
+
+    async fn add_identity(&mut self, identity: AddIdentity) -> Result<(), AgentError> {
+        log::trace!("incoming: add_identity");
+        self.forward_add_to_upstreams(|mut client, id| async move {
+            client.add_identity(id).await
+        }, identity).await
+    }
+
+    async fn add_identity_constrained(
+        &mut self,
+        identity: AddIdentityConstrained,
+    ) -> Result<(), AgentError> {
+        log::trace!("incoming: add_identity_constrained");
+        self.forward_add_to_upstreams(|mut client, id| async move {
+            client.add_identity_constrained(id).await
+        }, identity).await
     }
 
     async fn extension(&mut self, request: Extension) -> Result<Option<Extension>, AgentError> {
@@ -138,6 +155,31 @@ impl MuxAgent {
             known_keys: Default::default(),
         };
         agent::listen(listen_sock, this).await
+    }
+
+    async fn forward_add_to_upstreams<T, F, Fut>(&self, f: F, payload: T) -> Result<(), AgentError>
+    where
+        T: Clone,
+        F: Fn(Box<dyn Session>, T) -> Fut,
+        Fut: std::future::Future<Output = Result<(), AgentError>>,
+    {
+        if self.socket_paths.is_empty() {
+            return Err(AgentError::Other(
+                "No upstream agents configured to store the identity".into(),
+            ));
+        }
+        for sock_path in &self.socket_paths {
+            match self.connect_upstream_agent(sock_path) {
+                Ok(client) => f(client, payload.clone()).await?,
+                Err(_) => {
+                    log::warn!(
+                        "Ignoring missing upstream agent socket: {}",
+                        sock_path.display()
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     fn connect_upstream_agent(
