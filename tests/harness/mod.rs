@@ -1,7 +1,10 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
     ffi::{OsStr, OsString},
     fs,
     io::{self, Write},
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
@@ -12,6 +15,79 @@ const CRATE_MAIN_BIN: &str = env!(concat!("CARGO_BIN_EXE_", env!("CARGO_PKG_NAME
 const AGENT_TIMEOUT: Duration = Duration::from_secs(2);
 const AGENT_POLL: Duration = Duration::from_micros(100);
 const SIGTERM: std::ffi::c_int = 15;
+const SSH_KEY_FILE_MODE: u32 = 0o400;
+
+#[derive(Debug)]
+pub struct SshPkiKeygen {
+    pub ca_key: Vec<u8>,
+    pub serial: usize,
+}
+
+impl SshPkiKeygen {
+    const CA_KEY_FILENAME: &str = "ca_key";
+    const USER_KEY_FILENAME: &str = "user_key";
+
+    pub fn new() -> io::Result<Self> {
+        let temp_dir = tempfile::tempdir()?;
+        cmd!("ssh-keygen", "-q", "-N", "", "-f", Self::CA_KEY_FILENAME)
+            .dir(temp_dir.path())
+            .run()
+            .map_err(|e| map_binary_notfound_error("ssh-keygen", e))?;
+
+        let ca_key = fs::read(temp_dir.path().join(Self::CA_KEY_FILENAME))?;
+
+        Ok(Self { ca_key, serial: 0 })
+    }
+
+    fn make_ca_dir(&self) -> io::Result<(tempfile::TempDir, PathBuf)> {
+        let temp_dir = tempfile::tempdir()?;
+        let ca_key_path = temp_dir.path().join(Self::CA_KEY_FILENAME);
+        fs::write(&ca_key_path, &self.ca_key)?;
+        #[cfg(unix)]
+        fs::set_permissions(&ca_key_path, fs::Permissions::from_mode(SSH_KEY_FILE_MODE))?;
+        Ok((temp_dir, ca_key_path))
+    }
+
+    pub fn sign(&mut self, key: impl AsRef<[u8]>) -> io::Result<Vec<u8>> {
+        let key = key.as_ref();
+
+        let (ca_dir, ca_key_path) = self.make_ca_dir()?;
+
+        let user_key_path = ca_dir.path().join(Self::USER_KEY_FILENAME);
+        fs::write(&user_key_path, key)?;
+
+        self.serial += 1;
+        #[rustfmt::skip]
+        cmd!(
+            "ssh-keygen",
+            "-q",
+            "-s", &ca_key_path,
+            "-I", "test_user",
+            "-n", "test_user",
+            "-V", "+1h",
+            "-z", self.serial.to_string(),
+            &user_key_path
+        )
+        .dir(ca_dir.path())
+        .run()
+        .map_err(|e| map_binary_notfound_error("ssh-keygen", e))?;
+
+        let user_cert_path = {
+            // Get the filename part of the key path
+            let mut user_cert_filename = user_key_path
+                .file_name()
+                .map(|s| s.to_os_string())
+                .unwrap_or_default();
+            user_cert_filename.push("-cert.pub");
+            // Clone the key path, but replace the filename with the `-cert.pub`-appended filename
+            let mut user_cert_path = user_key_path.clone();
+            user_cert_path.set_file_name(user_cert_filename);
+            user_cert_path
+        };
+
+        fs::read(&user_cert_path)
+    }
+}
 
 pub enum SshAgentType {
     OpenSsh,
@@ -106,11 +182,29 @@ impl SshAgentInstance {
             .map_err(|e| map_binary_notfound_error(CRATE_MAIN_BIN, e))
     }
 
-    pub fn add(&self, key: &str) -> io::Result<()> {
+    pub fn add(&self, key: impl AsRef<[u8]>) -> io::Result<()> {
         // Add an ssh-key from stdin
         cmd!("ssh-add", "-q", "--", "-")
             .env("SSH_AUTH_SOCK", &self.sock_path)
-            .stdin_bytes(key)
+            .stdin_bytes(key.as_ref())
+            .run()
+            .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
+
+        Ok(())
+    }
+
+    pub fn add_cert(&self, key: impl AsRef<[u8]>, cert: impl AsRef<[u8]>) -> io::Result<()> {
+        // Add a key and certificate pair from temporary files
+        let temp_dir = tempfile::tempdir()?;
+        let key_file = temp_dir.path().join("key");
+        fs::write(&key_file, key.as_ref())?;
+        #[cfg(unix)]
+        fs::set_permissions(&key_file, fs::Permissions::from_mode(SSH_KEY_FILE_MODE))?;
+        let cert_file = temp_dir.path().join("key-cert.pub");
+        fs::write(&cert_file, cert.as_ref())?;
+
+        cmd!("ssh-add", "-q", "--", &key_file)
+            .env("SSH_AUTH_SOCK", &self.sock_path)
             .run()
             .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
 
