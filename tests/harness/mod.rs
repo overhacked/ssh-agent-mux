@@ -2,6 +2,7 @@ use std::{
     ffi::{OsStr, OsString},
     fs,
     io::{self, Write},
+    path::Path,
     time::{Duration, Instant},
 };
 
@@ -114,6 +115,14 @@ impl SshAgentInstance {
             .run()
             .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
 
+        Ok(())
+    }
+
+    pub fn add_timed(&self, key_path: &Path, seconds: u32) -> io::Result<()> {
+        cmd!("ssh-add", "-q", "-t", seconds.to_string(), "--", key_path)
+            .env("SSH_AUTH_SOCK", &self.sock_path)
+            .run()
+            .map_err(|e| map_binary_notfound_error("ssh-add", e))?;
         Ok(())
     }
 
