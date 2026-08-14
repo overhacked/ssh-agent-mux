@@ -17,7 +17,7 @@ ssh-agent-lib = "0.5.1"
 toml = "0.9.8"
 
 [dependencies.shellexpand]
-version = "3.1.1"
+version = "3.1.2"
 features = ["path"]
 
 [dependencies.color-eyre]
