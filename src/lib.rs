@@ -31,10 +31,16 @@ impl Session for MuxAgent {
     }
 
     async fn sign(&mut self, request: SignRequest) -> Result<Signature, AgentError> {
-        let fingerprint = request.pubkey.fingerprint(Default::default());
+        let fingerprint = request
+            .credential
+            .key_data()
+            .fingerprint(Default::default());
         log::trace!("incoming: sign({})", &fingerprint);
 
-        if let Some(agent_sock_path) = self.get_agent_sock_for_pubkey(&request.pubkey).await? {
+        if let Some(agent_sock_path) = self
+            .get_agent_sock_for_pubkey(request.credential.key_data())
+            .await?
+        {
             log::info!(
                 "Requesting signature with key {} from upstream agent <{}>",
                 &fingerprint,
@@ -215,7 +221,11 @@ impl MuxAgent {
             };
             {
                 for id in &agent_identities {
-                    known_keys.insert(id.pubkey.clone(), sock_path.clone());
+                    // Key the map by the underlying public key. For an OpenSSH
+                    // certificate this is the cert's public key, which also matches
+                    // the plain-key sign request that ssh issues, so both resolve to
+                    // the same upstream agent.
+                    known_keys.insert(id.credential.key_data().clone(), sock_path.clone());
                 }
             }
             log::trace!(
